@@ -1,0 +1,43 @@
+# ── secrets ───────────────────────────────────────────────────────────────
+# This repo is intended to go public. Nothing real is ever committed.
+.env
+.env.local
+.env.*.local
+*.token.json
+tokens/
+secrets/
+credentials.json
+client_secret*.json
+
+# ── dependencies & build ──────────────────────────────────────────────────
+node_modules/
+.cache/
+dist/
+
+# Playwright browser binaries — kept out of OneDrive sync scope via
+# PLAYWRIGHT_BROWSERS_PATH, but ignore any local copy just in case.
+.playwright/
+ms-playwright/
+
+# ── generated ─────────────────────────────────────────────────────────────
+# tokens.css IS committed (it's the default palette), but per-run captures
+# and frame dumps are not.
+frames/
+captures/
+*.jpg
+*.jpeg
+!docs/**/*.jpg
+!docs/**/*.jpeg
+
+# ── OS / editor ───────────────────────────────────────────────────────────
+Thumbs.db
+desktop.ini
+ehthumbs.db
+.DS_Store
+*.swp
+.idea/
+.vscode/
+
+# ── logs ──────────────────────────────────────────────────────────────────
+*.log
+npm-debug.log*

@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Peripheral — Agenda</title>
+<link rel="stylesheet" href="/tokens.css">
+<link rel="stylesheet" href="./agenda.css">
+</head>
+<body>
+<!-- Fixed 1280x480. This page is rendered two ways from one source:
+     (1) screenshotted by the daemon and pushed to the Trofeo panel over HID,
+     (2) opened in a normal browser as the fallback when the panel is dead. -->
+<main class="pane" id="pane">
+
+  <header class="bar">
+    <div class="mark">
+      <span class="mark-glyph"></span>PERIPHERAL
+    </div>
+    <div class="bar-right">
+      <span class="badge" id="badge" hidden>STALE</span>
+      <span class="clock" id="clock">—</span>
+    </div>
+  </header>
+
+  <div class="body">
+    <section class="hero">
+      <div class="eyebrow">Up next</div>
+      <div class="countdown" id="countdown">—</div>
+      <h1 class="title" id="title">—</h1>
+      <div class="meta" id="meta"></div>
+    </section>
+
+    <aside class="agenda">
+      <div class="eyebrow">Today</div>
+      <ul class="events" id="events"></ul>
+    </aside>
+  </div>
+
+  <footer class="foot">
+    <div class="progress"><span class="progress-fill" id="progress"></span></div>
+  </footer>
+
+</main>
+<script src="./agenda.js"></script>
+</body>
+</html>

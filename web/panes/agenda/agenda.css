@@ -1,0 +1,220 @@
+/* Agenda pane — fixed 1280x480, flat ground, no photographic background.
+   The screenshot that inspired this project used the wallpaper as a bitmap
+   behind the type; at 6.86" that is unreadable. We take the hue only. */
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html, body {
+  width: var(--pane-w);
+  height: var(--pane-h);
+  overflow: hidden;
+  background: var(--ground);
+}
+
+body {
+  font-family: var(--font-mono);
+  color: var(--text);
+  /* Chromium screenshots benefit from greyscale AA on a dark ground —
+     subpixel AA leaves colour fringes that JPEG then smears. */
+  -webkit-font-smoothing: antialiased;
+  text-rendering: geometricPrecision;
+}
+
+.pane {
+  width: var(--pane-w);
+  height: var(--pane-h);
+  padding: var(--pad);
+  display: flex;
+  flex-direction: column;
+  /* One very slight vertical lift so the panel doesn't read as a flat slab.
+     Deliberately under 3% so it can never eat contrast. */
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.022) 0%, rgba(255,255,255,0) 42%),
+    var(--ground);
+}
+
+/* ── top bar ─────────────────────────────────────────────────────────────── */
+
+.bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 22px;
+  flex: 0 0 auto;
+}
+
+.mark {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.34em;
+  color: var(--text-faint);
+}
+
+/* The mark: a narrow bright bar at the edge of a dim one — the thing you
+   catch in the corner of your eye. */
+.mark-glyph {
+  width: 13px;
+  height: 13px;
+  background:
+    linear-gradient(90deg,
+      var(--accent-hero) 0 34%,
+      transparent 34% 52%,
+      var(--text-faint) 52% 100%);
+}
+
+.bar-right { display: flex; align-items: center; gap: 14px; }
+
+.clock {
+  font-size: 15px;
+  letter-spacing: 0.2em;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.badge {
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  color: var(--ground);
+  background: var(--stale);
+  padding: 3px 7px 2px;
+  font-weight: 700;
+}
+
+/* ── body: hero | agenda ─────────────────────────────────────────────────── */
+
+.body {
+  flex: 1 1 auto;
+  display: grid;
+  grid-template-columns: 1fr 462px;
+  gap: 36px;
+  padding-top: 26px;
+  min-height: 0;
+}
+
+.eyebrow {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  margin-bottom: 14px;
+}
+
+/* ── hero ────────────────────────────────────────────────────────────────── */
+
+.hero { display: flex; flex-direction: column; min-width: 0; }
+
+.countdown {
+  font-size: 104px;
+  line-height: 0.86;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--accent-hero);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* Longer strings ("IN 2 HR 40 MIN") must not clip the fixed-width panel. */
+.countdown.len-md { font-size: 78px; }
+.countdown.len-lg { font-size: 58px; letter-spacing: 0; }
+
+/* An event happening right now is the one state that should feel different. */
+.countdown.is-now { color: var(--ground); background: var(--accent-hero);
+  padding: 4px 16px 8px; align-self: flex-start; }
+
+.title {
+  margin-top: 20px;
+  font-size: 37px;
+  line-height: 1.12;
+  font-weight: 500;
+  letter-spacing: -0.005em;
+  color: var(--text);
+  /* Two lines maximum, then ellipsis — long meeting titles are the norm. */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.meta {
+  margin-top: auto;
+  font-size: 20px;
+  letter-spacing: 0.04em;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.meta .sep { color: var(--text-faint); margin: 0 10px; }
+.meta .cal-dot {
+  display: inline-block; width: 9px; height: 9px;
+  margin-right: 9px; vertical-align: 1px;
+}
+
+/* ── agenda list ─────────────────────────────────────────────────────────── */
+
+.agenda {
+  border-left: 1px solid var(--rule);
+  padding-left: 34px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.events { list-style: none; display: flex; flex-direction: column; gap: 13px; min-height: 0; }
+
+.event {
+  display: grid;
+  /* Time column must hold the widest form — "12:30 AM" — without colliding
+     with the title. Right-aligned so the digits stack cleanly down the list. */
+  grid-template-columns: 13px 104px 1fr;
+  align-items: baseline;
+  gap: 0 12px;
+  font-size: 20px;
+  letter-spacing: 0.01em;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+
+.event .tick { width: 9px; height: 9px; align-self: center; background: var(--text-faint); }
+.event .when { color: var(--text-dim); font-variant-numeric: tabular-nums; text-align: right; }
+.event .what { overflow: hidden; text-overflow: ellipsis; }
+
+/* Past — dimmed, but never struck through: a strikethrough at this pixel
+   density turns the glyphs to mush. Dropping contrast reads faster anyway. */
+.event.is-past { color: var(--text-faint); }
+.event.is-past .when { color: var(--text-faint); }
+.event.is-past .tick { background: transparent; box-shadow: inset 0 0 0 1px var(--text-faint); }
+
+/* The next event, echoed in the list, in the cool accent. */
+.event.is-next { color: var(--accent-cool); }
+.event.is-next .when { color: var(--accent-cool); }
+.event.is-next .tick { background: var(--accent-cool); }
+
+/* In progress right now. */
+.event.is-now { color: var(--accent-hero); }
+.event.is-now .when { color: var(--accent-hero); }
+.event.is-now .tick { background: var(--accent-hero); }
+
+.empty { font-size: 20px; color: var(--text-faint); letter-spacing: 0.04em; }
+
+/* ── footer progress ─────────────────────────────────────────────────────── */
+
+.foot { flex: 0 0 auto; padding-top: 22px; }
+
+.progress {
+  height: 7px;
+  background: var(--ground-2);
+  overflow: hidden;
+}
+
+/* Fill = elapsed share of the gap between the previous event and the next.
+   It empties as the meeting approaches, so a nearly-full bar means "now". */
+.progress-fill {
+  display: block;
+  height: 100%;
+  width: 0;
+  background: var(--accent-hero);
+}
