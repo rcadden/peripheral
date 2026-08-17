@@ -351,6 +351,48 @@ pushes a frame to real glass.
 - `npm run startup:logs` reads the log as UTF-8. Node writes UTF-8, Windows
   PowerShell reads ANSI, and every em-dash arrived as mojibake.
 
+- **The browser launcher truncated the OAuth URL at the first `&`**
+  (2026-08-17). `openBrowser()` ran `cmd /c start "" <url>` with the URL
+  unquoted, and **cmd treats `&` as a command separator** — so the browser
+  received `...?client_id=XXX` and nothing else, and cmd tried to run
+  `response_type=code` as a program. Google replied, accurately,
+  `Error 400: invalid_request — Required parameter is missing: response_type`.
+  - **It cost most of a session because of how it failed.** The URL *printed to
+    the terminal* was correct throughout, and pasting it by hand worked. Only
+    the auto-open path was broken, so the fault presented as a Google-side
+    account problem — an earlier attempt produced *"This app is blocked"*,
+    which was misread as a Workspace restriction and reported as such.
+    **Correction: that screen was not evidence of anything about Balcom.**
+  - Fixed by removing the shell: `rundll32 url.dll,FileProtocolHandler` is
+    spawned directly, so nothing can reinterpret `&`, `%`, `^` or `|`. The
+    quoted `start` form is kept only as a fallback.
+  - Measured against a local server before and after: the old form delivered
+    `/?v=CURRENT` — every parameter after the first gone — and both new forms
+    delivered the URL intact.
+  - `browserOpenCommands()` is exported and covered by four regression tests
+    asserting we never route a URL through unquoted `cmd /c start` again.
+  - The printed-URL hint is reworded to *"if no browser opens — or the page
+    shows an authorization error"*, because "no browser opened" was the wrong
+    symptom to wait for.
+- **A personal-project OAuth client is blocked by Balcom; the plan is now an
+  in-org client** (2026-08-17). Confirmed after the launcher bug was fixed and
+  a correct URL finally reached Google: consent as the Balcom account returns
+  `admin_policy_enforced` — *"This app is blocked"* — with no click-through.
+  - Supersedes the earlier note in `CLAUDE.md` that the client "does not need
+    to live in the Balcom org". That was tested and is wrong. Text kept and
+    marked, per the no-tidying rule.
+  - **Route 1a: own the Cloud project inside `balcomagency.com`.** A client
+    owned by an in-org project is an *internal app*, and "trust internal apps"
+    is on by default. Ricky has Console access on the work account and has
+    already used this route for n8n calendar access — which is why this is the
+    plan rather than a guess.
+  - Internal user type also removes the **7-day refresh-token expiry** that
+    External-plus-Testing would have imposed, along with verification and the
+    test-user list. Simpler than the personal-project route, not a compromise.
+  - Fallback if project creation is restricted: ask IT to allowlist the client
+    id under Security → API controls → App access control.
+  - **Untested as of this writing.**
+
 ### Known unknowns
 - **Whether Balcom permits third-party OAuth app access.** The entire calendar
   plan rests on this one untested assumption. If it is blocked, the only

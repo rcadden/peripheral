@@ -185,15 +185,43 @@ third-party app access are separate controls in the Workspace Admin console. A
 Workspace that blocks the former commonly permits the latter. Do not infer route
 1 is dead from route 2 being dead — test it.
 
-**The OAuth client does not need to live in the Balcom org.** Create it in a
+~~**The OAuth client does not need to live in the Balcom org.** Create it in a
 personal Google Cloud project and authorise the work account against it. Only
-the consent step touches Balcom policy.
+the consent step touches Balcom policy.~~
+**SUPERSEDED 2026-08-17 — tested and wrong.** A client owned by a personal
+Cloud project is a **third-party app** to Balcom's Workspace, and Balcom blocks
+those: consent returns *"This app is blocked. This app tried to access
+sensitive info in your Google Account."* — Google's `admin_policy_enforced`
+screen, which has no click-through. Text kept per the no-tidying rule.
+
+**Route 1a — the OAuth client lives IN the Balcom org. CURRENT PLAN.**
+A client owned by a Cloud project inside `balcomagency.com` is an **internal
+app**, and "trust internal apps" is on by default in the Admin console. Ricky
+has Console access on the work account and has already used this route for
+n8n calendar access, which is the evidence it is permitted.
+
+This is simpler than the personal-project route, not a compromise. With
+consent-screen **User Type: Internal**:
+- **No 7-day refresh-token expiry.** That limit applies to External apps in
+  Testing. An ambient display that needs re-consent every week is not ambient.
+- No verification, and no "unverified app" interstitial.
+- No test-user list — internal means any `balcomagency.com` account.
+
+The one prerequisite: the new project's **Organization must read
+`balcomagency.com`**, not "No organization". If the picker offers no org, then
+project creation is restricted and the fallback is asking IT to allowlist the
+client id under Security → API controls → App access control.
+
+**Cost to note:** the Cloud project is Balcom property. It disappears if Ricky
+leaves, and IT can see the client in the Admin console app list.
 
 **To test it** (the flow is already written — `src/auth/`):
-1. Google Cloud console as `grcadden@gmail.com`, new project.
+1. Google Cloud console as **`ricky.cadden@balcomagency.com`**, new project —
+   **verify the Organization field reads `balcomagency.com`.**
 2. Enable the Google Calendar API.
-3. Credentials → OAuth client → type **Desktop app**.
-4. Consent screen: add `ricky.cadden@balcomagency.com` as a test user.
+3. Google Auth Platform → Audience → User type **Internal**. Do not publish;
+   do not add test users. Neither applies to an internal app.
+4. Clients → Create client → type **Desktop app**.
 5. Put the client id/secret in `.env`, then `npm run auth` and sign in **as the
    Balcom account**.
 

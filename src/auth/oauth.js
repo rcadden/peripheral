@@ -61,18 +61,55 @@ function pkcePair() {
   return { verifier, challenge };
 }
 
+/**
+ * How to hand a URL to the user's browser, per platform.
+ *
+ * ── DO NOT ROUTE A URL THROUGH `cmd /c start` UNQUOTED ────────────────────
+ * That is what this used to do, and cmd treats `&` as a COMMAND SEPARATOR.
+ * An OAuth authorization URL is almost entirely `&`-delimited parameters, so
+ * the browser received exactly `...?client_id=XXX` and nothing else. Google
+ * answered, accurately, `Error 400: invalid_request — Required parameter is
+ * missing: response_type`.
+ *
+ * It cost a debugging session because of how it failed: the URL printed to
+ * the terminal was perfectly correct, and pasting it by hand worked. Only the
+ * auto-opened browser was broken, so the bug looked like a Google-side policy
+ * problem — an earlier attempt even produced "This app is blocked", which was
+ * misread as a Workspace restriction. Measured 2026-08-17 against a local
+ * server: the current form dropped every parameter after the first.
+ *
+ * `rundll32 url.dll,FileProtocolHandler` invokes no shell at all, so there is
+ * nothing to reparse `&`, `%`, `^` or `|`. Verified to deliver the URL intact.
+ * The quoted `start` form also survives, and is kept only as a fallback.
+ *
+ * Exported so a test can assert we never regress to the unquoted form.
+ *
+ * @param {string} url
+ * @returns {{cmd: string, args: string[], opts: object}[]} in preference order
+ */
+export function browserOpenCommands(url, platform = process.platform) {
+  if (platform === 'win32') {
+    return [
+      { cmd: 'rundll32', args: ['url.dll,FileProtocolHandler', url], opts: {} },
+      // cmd's `start` takes the first quoted arg as a window title, hence "".
+      // The URL MUST carry its own quotes, and windowsVerbatimArguments stops
+      // Node from re-escaping them into something cmd no longer understands.
+      { cmd: 'cmd', args: ['/c', 'start', '""', `"${url}"`], opts: { windowsVerbatimArguments: true } },
+    ];
+  }
+  if (platform === 'darwin') return [{ cmd: 'open', args: [url], opts: {} }];
+  return [{ cmd: 'xdg-open', args: [url], opts: {} }];
+}
+
 /** Best-effort browser open. Always returns; the URL is printed regardless. */
 function openBrowser(url) {
-  try {
-    if (process.platform === 'win32') {
-      // cmd's `start` treats the first quoted arg as a window title, hence "".
-      spawn('cmd', ['/c', 'start', '""', url], { detached: true, stdio: 'ignore' }).unref();
-    } else if (process.platform === 'darwin') {
-      spawn('open', [url], { detached: true, stdio: 'ignore' }).unref();
-    } else {
-      spawn('xdg-open', [url], { detached: true, stdio: 'ignore' }).unref();
-    }
-  } catch { /* the printed URL is the fallback */ }
+  for (const { cmd, args, opts } of browserOpenCommands(url)) {
+    try {
+      spawn(cmd, args, { detached: true, stdio: 'ignore', ...opts }).unref();
+      return;
+    } catch { /* try the next one */ }
+  }
+  // Not fatal: loginInteractive() prints the URL immediately above this call.
 }
 
 function htmlPage(title, body) {
@@ -208,7 +245,12 @@ export async function loginInteractive({
       console.log(`\n[auth] authorising account "${account}"`);
       console.log(`[auth] listening on ${redirect}`);
       console.log(`[auth] sign in as the ${account.toUpperCase()} account.`);
-      console.log(`\nIf no browser opens, paste this:\n\n${authUrl}\n`);
+      // Printed BEFORE the browser opens, and worded to cover the failure that
+      // actually happened: the auto-open path once mangled the URL while this
+      // text stayed correct, so "no browser opened" was the wrong symptom to
+      // wait for. If Google shows an error, suspect the launcher first.
+      console.log(`\nIf no browser opens — or the page shows an authorization`
+        + ` error — paste this URL yourself:\n\n${authUrl}\n`);
       openBrowser(authUrl);
     });
   });
