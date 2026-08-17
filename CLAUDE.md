@@ -39,8 +39,8 @@ the entire fetch path in one go.
 > method, and the open questions that need Ricky.
 
 ## Session-end ritual — changelog first, handoff derived
-**Run `/session-close`** (`.claude/skills/session-close/`). It carries the full
-checklist: a blocking verification gate, roadmap sync, changelog, lessons,
+**Run `/session-close`** (`.claude/commands/session-close.md`). It carries the
+full checklist: a blocking verification gate, roadmap sync, changelog, lessons,
 memory, commit, a derived handoff, and confirming the daemon is still running.
 Adapted from Drywater's equivalent, 2026-08-17.
 
@@ -67,6 +67,27 @@ Rules that follow from it:
 - Each session gets a **new** dated handoff at
   `docs/plans/session-handoff-YYYY-MM-DD[letter].md` that names the file it
   supersedes. Previous handoffs are never edited and never deleted.
+
+## Branching — this project overrides the global rule
+**`/session-close` pushes `dev` and then fast-forwards `main`, without asking**
+(Ricky, 2026-08-17). This deliberately contradicts the global instruction that
+`main` is pushed only on explicit instruction — do not "fix" it back.
+
+The global rule is calibrated for projects like Drywater, which has paying
+customers, store review, and a public build on `main`. Peripheral has none of
+that: no customers, no deployment, one user on one machine, and `main` is not
+wired to anything. The cost of a bad `main` here is that Ricky pulls it on the
+same PC he pushed it from. Sprints are also smaller and sessions more frequent,
+so a branch question at every close is pure friction.
+
+**Outside `/session-close`, the normal rule still applies** — mid-session work
+goes to `dev`, and `main` is not touched unless Ricky says so.
+
+`git push origin dev:main` is the mechanism: it fast-forwards without a local
+checkout, so no branch switch happens on Windows while the daemon holds the
+working tree open. A non-fast-forward rejection means the branches diverged,
+which should not happen in this workflow — stop and report it rather than
+reaching for `--force`.
 
 ## Hardware — read this before touching the transport
 **Thermalright Trofeo Vision LCD 6.86" Black Edition** ($37.90, Amazon

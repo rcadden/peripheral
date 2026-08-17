@@ -1,13 +1,8 @@
----
-name: session-close
-description: Close out a work session on Peripheral — verification gate, roadmap sync, changelog, lessons, memory, commit, and a derived handoff. Use when Ricky says /session-close, "let's wrap up", "close out the session", "end of session", or otherwise signals the session is ending. Also use before a long gap in work, or before handing the project to a cold start.
----
+Close out the current work session for Peripheral.
 
-# Peripheral — Session Close
-
-Adapted from Drywater's `session-close` command, 2026-08-17. The skeleton is
-the same because it works: a blocking gate first, then documentation in a fixed
-order, then commit, then a handoff written for a cold reader. What changed is
+Adapted from Drywater's `session-close`, 2026-08-17. The skeleton is the same
+because it works: a blocking gate first, then documentation in a fixed order,
+then commit, then a handoff written for a cold reader. What changed is
 everything downstream of "what does shipping mean here" — Peripheral has no
 release channels, a private repo, and one user. Its equivalents are different
 and are called out where they diverge.
@@ -15,6 +10,10 @@ and are called out where they diverge.
 **Step 0 is a gate.** Do it first, present it, and STOP until Ricky answers.
 Then execute Steps 1–8 in order. Do not skip steps. Do not reorder Steps 3 and
 7 — see the note there.
+
+**Sessions here are smaller than Drywater's.** This command will run often, on
+sessions that changed one thing. That is expected: skip steps that genuinely
+have nothing in them and say so, rather than padding each one to look thorough.
 
 ---
 
@@ -150,7 +149,8 @@ Two standing rules to apply here:
 
 - **One failure → one standing rule.** Do not stop at the fix. Name the rule
   that prevents the whole class, and put it where it will be read. "A dead
-  daemon must LOOK dead" is worth more than the `process.exit(1)` that occasioned it.
+  daemon must LOOK dead" is worth more than the `process.exit(1)` that
+  occasioned it.
 - **Any behaviour the device exhibits that we cannot explain gets a committed
   diagnostic script, not a note.** The script survives a firmware revision and
   a replacement unit; a note does not. `npm run idle-test` is the precedent.
@@ -174,7 +174,7 @@ Update `C:\Users\grcad\.claude\projects\C--dev-peripheral\memory\`:
 anything already in `CLAUDE.md` do not belong in memory. If it can be answered
 by reading the repo, it is not a memory.
 
-## Step 6 — Commit and push
+## Step 6 — Commit and push (dev, then main — no gate)
 
 Stage everything. Commit with a message that explains the *why*, following the
 project's established style — Conventional Commits header, then prose covering
@@ -187,12 +187,30 @@ message is the only artifact that travels with the diff.
 right subject **only when the session produced no code.** Otherwise the commit
 describes the work.
 
-Then: **push to `dev`.** `main` only on Ricky's explicit instruction — never
-assumed, and never as part of session close.
+Before pushing, confirm `npm test` passes and say the number out loud. The test
+script uses a scoped glob deliberately: bare `node --test` discovers
+`src/transport/idle-test.js` and drives real hardware for 68 seconds.
 
-Before pushing, confirm `npm test` passes and say the number out loud. Note
-that the test script uses a scoped glob deliberately: bare `node --test`
-discovers `src/transport/idle-test.js` and drives real hardware for 68 seconds.
+Then **push `dev`, then fast-forward `main`. Do not ask.**
+
+```bash
+git push origin dev
+git push origin dev:main
+```
+
+**This is a deliberate departure from Drywater and from the global rule that
+`main` needs explicit instruction** (Ricky, 2026-08-17). Peripheral's risk
+profile is not comparable: no paying customers, no store review, no public
+build, one user on one machine, and `main` is not deployed anywhere. The cost
+of a bad `main` here is that Ricky pulls it on the same PC he just pushed from.
+Sprints are also smaller, so gating every close on a branch question is pure
+friction.
+
+`git push origin dev:main` fast-forwards without a local checkout, which avoids
+switching branches on Windows while the daemon holds the working tree open.
+**If it is rejected as non-fast-forward, STOP and report it** — that means the
+branches diverged, which should not happen in this workflow and must not be
+resolved with `--force` on a reflex.
 
 ## Step 7 — Handoff (derived from Step 3)
 
@@ -217,7 +235,8 @@ Contents:
 Write for a **cold start after a multi-day gap**, because that is the real
 reading condition. Assume no memory of this session at all.
 
-Then update the pointer in `CLAUDE.md`'s Status block to the new file.
+Then update the pointer in `CLAUDE.md`'s Status block to the new file, and
+include it in the Step 6 commit (or a follow-up commit, pushed the same way).
 
 ## Step 8 — Leave the panel lit
 
