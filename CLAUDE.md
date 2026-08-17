@@ -90,7 +90,9 @@ Never fork the pane into a "panel version" and a "browser version". The moment
 those diverge, the fallback stops being trustworthy.
 
 ## Active Integrations
-- **Google Calendar** (read-only) — two accounts, merged. See Environment.
+- **Google Calendar** (read-only) — **one account: work.** Personal arrives via a
+  native share into the work calendar, so Google merges server-side and
+  Peripheral holds a single token. See Environment.
 
 ## Environment & Credentials
 Secrets live in `.env` (gitignored) and a local token store. **This repo goes
@@ -100,25 +102,57 @@ the contract.
 | Value | Status |
 |---|---|
 | Google OAuth client ID / secret | **NOT YET CREATED** |
-| Personal calendar | `grcadden@gmail.com` — confirmed reachable |
-| Work calendar (Balcom) | **UNRESOLVED — critical path.** Not visible from the personal account. |
+| Personal calendar | `grcadden@gmail.com` — confirmed reachable. Also natively shared **into** the work calendar, which is how the primary gets it. |
+| Work calendar (Balcom) | **PRIMARY account — critical path.** Direct OAuth, untested. Sharing work→personal is confirmed blocked; see below. |
 | Server port | `4780` (1280 wide, 480 tall), override `PERIPHERAL_PORT` |
 | Wallpaper source | `%APPDATA%\Microsoft\Windows\Themes\TranscodedWallpaper` |
 
-### Work calendar — the open question
-Confirmed 2026-08-17: the personal Google account exposes only Personal, US
-Holidays, and two imported athletics feeds. **No Balcom calendar.** Work is the
-more important half, so this is the critical path. Routes, in order:
+### Work calendar — the plan (revised 2026-08-17)
 
-1. **Direct OAuth against the Balcom account** (two tokens, merged in app).
-   Real-time. Risk: Workspace admin may block unverified third-party apps.
-2. **Native Google sharing, work → personal Gmail.** Real-time, one token.
-   Risk: admin may forbid external sharing or downgrade it to free/busy only.
-3. **Private ICS "secret address".** Almost always works but Google refreshes
-   imported feeds every 8–24h — **fatal for a countdown.** Last resort.
+**The work account is the primary, not the personal account.** One OAuth token,
+against Balcom. Personal comes along for free because it is already natively
+shared *into* the work calendar.
 
-`src/sources/gcal.js` is a provider interface so all three drop in
-interchangeably. Nothing else in the build depends on which we get.
+This inverts the original design and is simpler than it: Google performs the
+merge server-side, so there is one token, one refresh path, and no client-side
+reconciliation of two API responses.
+
+**What is confirmed, 2026-08-17:**
+- The personal Google account exposes only Personal, US Holidays, and two
+  imported athletics feeds. **No Balcom calendar.**
+- **Sharing work → personal is blocked.** Tested and confirmed not to work.
+  Route 2 below is dead.
+- **Personal → work is a native share by email, and it works** — real-time, full
+  event details, not an ICS import. This is what makes work-as-primary viable.
+
+**The direction of travel matters.** Outbound external sharing from Balcom is
+blocked; inbound is fine. So the merge has to happen *inside* the work account,
+which is exactly what work-as-primary does.
+
+**Routes, revised:**
+
+1. **Direct OAuth against the Balcom account — CURRENT PLAN.** One token, one
+   account, personal included via the existing native share. Real-time.
+   **Untested.** Risk: Workspace may block third-party app access.
+2. ~~**Native Google sharing, work → personal Gmail.**~~ **DEAD — confirmed
+   2026-08-17.** Balcom blocks outbound external calendar sharing. Text kept for
+   the record; do not retry this.
+3. **Private ICS "secret address."** Fallback only. Google refreshes imported
+   feeds every 8–24h — **fatal for a countdown.** If we land here the panel must
+   set `stale=true` permanently and the countdown becomes a rough indicator, not
+   a number to trust.
+
+**Route 2 failing does not predict route 1.** External sharing restrictions and
+third-party app access are separate controls in the Workspace Admin console. A
+Workspace that blocks the former commonly permits the latter. Do not infer route
+1 is dead from route 2 being dead — test it.
+
+**The OAuth client does not need to live in the Balcom org.** Create it in a
+personal Google Cloud project and authorise the work account against it. Only
+the consent step touches Balcom policy.
+
+`src/sources/gcal.js` is a provider interface so all three routes drop in
+interchangeably. Nothing else in the build depends on which one we get.
 
 ## Brand & Design
 - **Aesthetic:** flat near-black ground, monospace throughout, no gradients

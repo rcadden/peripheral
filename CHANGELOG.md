@@ -57,8 +57,47 @@ pushes a frame to real glass.
   work-calendar access is the critical path and is *not* blocked on hardware —
   it can move today.
 
+- **Work calendar access resolved in principle — the work account is now the
+  primary** (2026-08-17). Supersedes the original design of personal-as-primary
+  with two tokens merged in-app.
+  - Route 2 (native sharing, work → personal) was **tested and is blocked** by
+    Balcom. Marked dead in `CLAUDE.md`; not to be retried.
+  - Personal *is* natively shared **into** the work calendar, by email, with full
+    event details and in real time. Outbound sharing from Balcom is blocked;
+    inbound is not. So the merge happens inside the work account.
+  - Therefore route 1 — one OAuth token against Balcom — yields both halves with
+    Google doing the merge server-side. One token, one refresh path, no
+    client-side reconciliation.
+  - Recorded explicitly: **route 2's failure does not predict route 1's.**
+    External sharing restrictions and third-party app access are separate
+    Workspace Admin controls. Also recorded: the OAuth client does not need to
+    live in the Balcom org — create it in a personal Cloud project and authorise
+    the work account against it.
+- `ApiProvider` now takes a `calendars` map (`calendarId → display label`)
+  instead of a bare `calendarIds` array, and gains `labelFor()`. A single account
+  can now serve several display labels, which single-account merging requires —
+  every event would otherwise be tagged `work`. `PeripheralEvent.calendar` is
+  documented as a display label, never inferred from the account. Unmapped ids
+  fall back to the account name.
+- `SharedProvider` removed from the `gcal.js` interface plan, with the reason
+  recorded inline so it is not reintroduced.
+- `collect()` documentation now notes the consequence of the single-provider
+  case: partial failure largely disappears and total failure gets *more* likely,
+  since one revoked work token loses work and personal together. That is the
+  accepted cost of one token, and it upgrades the daemon's last-good-state cache
+  from nice-to-have to mandatory.
+
 ### Fixed
 - Nothing yet.
+
+### Known unknowns
+- **Whether Balcom permits third-party OAuth app access.** The entire calendar
+  plan rests on this one untested assumption. If it is blocked, the only
+  remaining route is ICS, which refreshes every 8–24h and reduces the countdown
+  from a number to a rough indicator.
+- Real `calendarId` values. A shared-in calendar's id is usually the sharer's
+  address, but imported and secondary calendars use opaque ids. Enumerate with
+  `calendarList.list` once a token exists; do not hardcode.
 
 ## Decisions worth not relitigating
 

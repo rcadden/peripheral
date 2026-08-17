@@ -14,9 +14,22 @@ Sprints are thematic, not time-boxed. `- [x]` marks done; nothing is deleted.
 - [x] Local server serving panes from `web/`, `/api/state` endpoint
 - [x] Agenda pane rendering at true 1280×480 on mock data, live countdown
 - [x] Wallpaper → palette extraction with a hard contrast gate
-- [ ] **Resolve work-calendar access — route 1, 2, or 3 (see `CLAUDE.md`)**
-- [ ] **Google OAuth: create desktop client, authorise both accounts, token store**
-- [ ] **Real calendar data behind `/api/state`, two accounts merged**
+- [x] Resolve work-calendar access — **decided: work account is the primary**
+      *(2026-08-17: route 2, sharing work → personal, tested and BLOCKED by
+      Balcom. But personal is already natively shared INTO work, so route 1 —
+      one OAuth token against Balcom — gets both halves and Google merges them
+      server-side. Route 2 is dead; do not retry. Route 3 (ICS) remains the
+      fallback. Original plan was personal-as-primary with two merged tokens;
+      superseded.)*
+- [ ] **Verify Balcom permits third-party OAuth app access** — the one untested
+      assumption the plan rests on. Separate Workspace control from the sharing
+      restriction that killed route 2; do not infer it from that failure.
+- [ ] **Google OAuth: create desktop client in a *personal* Cloud project,
+      authorise the *work* account, token store**
+- [ ] Enumerate real calendarIds via `calendarList.list`, map them to display
+      labels (`work` / `personal`) — ids for shared-in calendars must be
+      verified, not assumed
+- [ ] **Real calendar data behind `/api/state`, single work account**
 - [ ] Confirm Windows enumerates `0416:5302` on arrival (`npm run probe`)
 - [ ] **HID transport: JPEG frame push at 1 fps**
 - [ ] Playwright renderer: screenshot localhost → JPEG → transport
