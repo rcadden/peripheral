@@ -7,6 +7,19 @@ the design pass and the session-close tooling. That file is kept for the record;
 Derived from `CHANGELOG.md`, per the session-end ritual. If the two disagree,
 the changelog wins.
 
+> **Amendment, 2026-08-17 (same day, after this file was first written).**
+> Appended rather than rewritten, per the no-tidying rule. Two changes:
+> - **A second type pass landed.** `.mark` and `.clock` doubled (30px / 34px),
+>   the eyebrows doubled to 30px and went bold, and the agenda list took another
+>   +2px to 24px. `.bar`'s fixed 22px height was removed — it clipped. The
+>   agenda time column was checked and deliberately left at 104px: `12:30 AM`
+>   measures 76.9px at the new size.
+> - **The personal Google Cloud project has been deleted.** Open question 6
+>   below is closed; the in-org project is the only one.
+>
+> The type scale remains **provisionally** accepted — the second pass does not
+> change that, and open question 2 still stands.
+
 ## State of the world
 
 **Sprint 1 is complete and the panel is live on Ricky's desk**, showing his real
@@ -133,7 +146,9 @@ Carried forward and added to. Everything in the previous handoffs still holds.
    regression — do not argue from "but you approved this."
 3. **Should `focusTime` and `outOfOffice` be able to take the hero slot?** Kept
    deliberately, because blocked time is real time. But a countdown to "Focus
-   time" may read as noise. Decide after living with it.
+   time" may read as noise. **This is no longer hypothetical — it happened at
+   15:27 on 2026-08-17**, with the panel counting down Ricky's own focus block.
+   Judge it in use rather than in theory.
 4. **Is the `travel` (TripIt) feed worth its row?** It is an imported feed, so
    it refreshes on Google's schedule, not in real time. It has also never
    rendered — zero events on the day it was wired up.
@@ -142,7 +157,5 @@ Carried forward and added to. Everything in the previous handoffs still holds.
    direction. Left open because the mechanism is unexamined: the render and
    push timers share one event loop, which is the exact coupling the two-loop
    design was meant to remove.
-6. **Delete the unused personal Google Cloud project?** The in-org project is
-   the live one. The personal client id/secret were also exposed in a chat
-   transcript — low consequence for a desktop client with PKCE, but there is no
-   reason to keep either.
+6. ~~**Delete the unused personal Google Cloud project?**~~ **DONE
+   2026-08-17** — Ricky deleted it. The in-org project is the only one.

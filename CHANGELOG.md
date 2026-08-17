@@ -517,6 +517,32 @@ pushes a frame to real glass.
 - **The state cache round trip is confirmed against real data**, not just unit
   tests: `[cache] restored 18 event(s) — serving stale until the first fetch`
   fired three times across daemon restarts on 2026-08-17.
+- **Second type pass, later on 2026-08-17** (amends the +2px entry above, which
+  stands as written). Ricky, after living with the first pass:
+  - `.mark` ("PERIPHERAL") 15px → **30px**, `.clock` (date/time) 17px → **34px**
+    — both doubled.
+  - `.eyebrow` ("UP NEXT" / "TODAY") 15px → **30px** and **bold** (600 → 700).
+  - The agenda list up another 2px: `.event` 22 → 24, the all-day `when` label
+    17 → 19, `.empty` 22 → 24.
+  - `.mark-glyph` scaled 13px → 26px. **Not asked for** — a 13px square beside
+    30px type reads as a rendering bug rather than as a lockup. Flagged as a
+    judgement call rather than done silently.
+  - **`.bar` had a fixed `height: 22px`** which clipped the instant the bar type
+    doubled. Height is content-driven now; `.body` is `flex: 1 1 auto` and
+    absorbs the difference.
+  - **Checked and NOT changed:** the agenda time column is `104px` and its own
+    comment promises it holds the widest form, `12:30 AM`. Measured in the page
+    at the new size: **76.9px**. It fits with room to spare, so the column was
+    left alone. Recorded because the next size increase is the one that breaks
+    it, and this is the number to check against.
+  - Six agenda rows still fit 480px with nothing clipped.
+- **`focusTime` reached the hero slot in normal use**, 2026-08-17 15:27 — the
+  panel showed a countdown to Ricky's own focus block. This is the open
+  question from the design pass appearing in the wild rather than in theory,
+  and it is now something he can judge rather than predict.
+- The unused **personal Google Cloud project has been deleted** (Ricky,
+  2026-08-17). The in-org project is the only one. Closes the housekeeping item
+  raised when its client id/secret were exposed in a chat transcript.
 
 ### Known unknowns
 - ~~**Whether Balcom permits third-party OAuth app access.**~~ **ANSWERED

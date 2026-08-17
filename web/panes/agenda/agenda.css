@@ -39,7 +39,9 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  height: 22px;
+  /* Was a fixed 22px, which clipped the moment the bar type doubled
+     (2026-08-17). Content drives the height now; the body below is
+     `flex: 1 1 auto` and absorbs the difference. */
   flex: 0 0 auto;
 }
 
@@ -47,7 +49,7 @@ body {
   display: flex;
   align-items: center;
   gap: 9px;
-  font-size: 15px;
+  font-size: 30px;
   font-weight: 600;
   letter-spacing: 0.34em;
   color: var(--text-faint);
@@ -56,8 +58,10 @@ body {
 /* The mark: a narrow bright bar at the edge of a dim one — the thing you
    catch in the corner of your eye. */
 .mark-glyph {
-  width: 13px;
-  height: 13px;
+  /* Scaled with the label, not asked for separately: a 13px square beside
+     30px type reads as a rendering bug rather than as a lockup. */
+  width: 26px;
+  height: 26px;
   background:
     linear-gradient(90deg,
       var(--accent-hero) 0 34%,
@@ -68,7 +72,7 @@ body {
 .bar-right { display: flex; align-items: center; gap: 14px; }
 
 .clock {
-  font-size: 17px;
+  font-size: 34px;
   letter-spacing: 0.2em;
   color: var(--text-dim);
   font-variant-numeric: tabular-nums;
@@ -95,8 +99,8 @@ body {
 }
 
 .eyebrow {
-  font-size: 15px;
-  font-weight: 600;
+  font-size: 30px;
+  font-weight: 700;
   letter-spacing: 0.3em;
   text-transform: uppercase;
   color: var(--text-faint);
@@ -181,7 +185,7 @@ body {
   grid-template-columns: 13px 104px 1fr;
   align-items: baseline;
   gap: 0 12px;
-  font-size: 22px;
+  font-size: 24px;
   letter-spacing: 0.01em;
   color: var(--text-dim);
   white-space: nowrap;
@@ -212,14 +216,14 @@ body {
    meeting for attention. "ALL DAY" is tracked out to read as a label rather
    than as a mis-set clock time in the same column. */
 .event.is-allday { color: var(--text-faint); }
-.event.is-allday .when { color: var(--text-faint); font-size: 17px; letter-spacing: 0.08em; }
+.event.is-allday .when { color: var(--text-faint); font-size: 19px; letter-spacing: 0.08em; }
 .event.is-allday .tick {
   background: transparent;
   box-shadow: inset 0 0 0 1px var(--text-faint);
   transform: rotate(45deg);
 }
 
-.empty { font-size: 22px; color: var(--text-faint); letter-spacing: 0.04em; }
+.empty { font-size: 24px; color: var(--text-faint); letter-spacing: 0.04em; }
 
 /* ── footer progress ─────────────────────────────────────────────────────── */
 
