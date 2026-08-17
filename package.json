@@ -12,11 +12,11 @@
     "start": "node src/daemon.js",
     "auth": "node --env-file-if-exists=.env src/auth/login.js",
     "palette": "node src/palette.js",
-    "probe": "node src/transport/probe.js"
+    "probe": "node src/transport/probe.js",
+    "send": "node --env-file-if-exists=.env src/transport/send.js"
   },
-  "dependencies": {},
   "optionalDependencies": {
-    "node-hid": "^3.1.2",
+    "node-hid": "^3.4.0",
     "playwright": "^1.49.0",
     "sharp": "^0.33.5"
   }

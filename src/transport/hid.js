@@ -54,42 +54,274 @@
  *   - 1 fps default. This panel has a reliability record; do not hammer it.
  */
 
+import { promises as fs } from 'node:fs';
+import path from 'node:path';
+
 const VID = Number(process.env.PERIPHERAL_HID_VID ?? 0x0416);
 const PID = Number(process.env.PERIPHERAL_HID_PID ?? 0x5302);
 const DRY_RUN = /^true$/i.test(process.env.PERIPHERAL_DRY_RUN ?? '');
+
+/* ── Wire constants, Type 2 (0416:5302) ───────────────────────────────────
+ * Taken from the protocol reference, not inferred. See the links in the
+ * header. Every one of these was cross-checked against two independent
+ * implementations (trcc-linux HidLcd, and its HidApiTransport for the
+ * hidapi-specific report-ID handling).
+ */
+const MAGIC = Buffer.from([0xDA, 0xDB, 0xDC, 0xDD]);
+const INIT_SIZE = 512;          // handshake packet, zero-padded
+const RESPONSE_SIZE = 512;      // bytes requested on the read
+const CHUNK = 512;              // == OUT endpoint maxPacketSize, measured
+const CMD_PICTURE = 0x02;
+const FRAME_SETTLE_MS = 1;      // _DELAY_FRAME_TYPE2_S in the reference
+
+/** Round up to the next multiple of CHUNK. Frames are 512-aligned. */
+const alignUp = (n) => Math.ceil(n / CHUNK) * CHUNK;
+
+/**
+ * 512-byte handshake: magic, 8 zeros, command=1 (DEV_INFO), 4 zeros, padded.
+ * @returns {Buffer}
+ */
+export function buildInitPacket() {
+  const p = Buffer.alloc(INIT_SIZE);
+  MAGIC.copy(p, 0);
+  p.writeUInt32LE(1, 12);   // command = DEV_INFO. Offsets 4-11 stay zero.
+  return p;
+}
+
+/**
+ * Type 2 frame: 20-byte header + JPEG, zero-padded to a 512 multiple.
+ *
+ *   0..3   magic DA DB DC DD
+ *   4..5   cmd_type = 0x0002 (PICTURE)
+ *   6..7   0x0000 = JPEG payload  (0x0001 would be RGB565)
+ *   8..11  width, height as u16 LE
+ *   12..15 0x00000002
+ *   16..19 payload length, u32 LE
+ *
+ * @param {Buffer} jpeg
+ * @param {number} width
+ * @param {number} height
+ * @returns {Buffer}
+ */
+export function buildFramePacket(jpeg, width = 1280, height = 480) {
+  if (!(jpeg?.length >= 2) || jpeg[0] !== 0xFF || jpeg[1] !== 0xD8) {
+    throw new Error('frame payload is not a JPEG (missing FF D8 magic)');
+  }
+  const header = Buffer.alloc(20);
+  MAGIC.copy(header, 0);
+  header.writeUInt16LE(CMD_PICTURE, 4);
+  header.writeUInt16LE(0x0000, 6);      // JPEG mode
+  header.writeUInt16LE(width, 8);
+  header.writeUInt16LE(height, 10);
+  header.writeUInt32LE(0x00000002, 12);
+  header.writeUInt32LE(jpeg.length, 16);
+
+  const raw = Buffer.concat([header, jpeg]);
+  const padded = Buffer.alloc(alignUp(raw.length));   // Buffer.alloc zero-fills
+  raw.copy(padded, 0);
+  return padded;
+}
+
+/**
+ * Parse a handshake reply. Returns null if it isn't one.
+ *
+ * PM lives at [5] and SUB at [4]. A Trofeo Vision answers PM=128 SUB=1. Some
+ * firmwares reply with only 8 bytes; the magic alone is enough to accept those,
+ * and PM/SUB still parse.
+ *
+ * @param {Buffer} resp
+ */
+export function parseHandshake(resp) {
+  if (!resp || resp.length < 6 || !resp.subarray(0, 4).equals(MAGIC)) return null;
+  const short = resp.length < 20;
+  return {
+    pm: resp[5],
+    sub: resp[4],
+    short,
+    // The reference requires [12]==0x01 on a full-length reply.
+    standardValid: short ? false : resp[12] === 0x01,
+    raw: Buffer.from(resp),
+  };
+}
 
 export class PanelTransport {
   #device = null;
   #healthy = false;
   #lastError = null;
   #backoffMs = 1000;
+  #info = null;
+  #frameDir = null;
 
   get healthy() { return this.#healthy; }
   get lastError() { return this.#lastError; }
+  /** Handshake result: { pm, sub, short } once open() has succeeded. */
+  get info() { return this.#info; }
 
   async open() {
     if (DRY_RUN) {
+      this.#frameDir = path.resolve('frames');
+      await fs.mkdir(this.#frameDir, { recursive: true });
       this.#healthy = true;
-      console.log('[hid] DRY_RUN — frames will be written to ./frames/, not the panel');
+      console.log(`[hid] DRY_RUN — frames go to ${this.#frameDir}, not the panel`);
       return true;
     }
-    throw new Error('PanelTransport.open() not implemented — see header. Set PERIPHERAL_DRY_RUN=true to work without hardware.');
+
+    let HID;
+    try {
+      HID = (await import('node-hid')).default;
+    } catch (err) {
+      this.#fail(new Error(`node-hid not available: ${err.message}. Run \`npm i\`.`));
+      return false;
+    }
+
+    try {
+      // Enumerate rather than open by VID/PID: this device exposes two
+      // interfaces and only interface 0 carries the frame endpoint. The
+      // instance path also changes per USB port, so it must not be hardcoded.
+      const candidates = HID.devices().filter(
+        (d) => d.vendorId === VID && d.productId === PID,
+      );
+      if (!candidates.length) {
+        this.#fail(new Error(
+          `panel ${hex(VID)}:${hex(PID)} not enumerating — check the USB-C cable ` +
+          `(a known failure point on this model), then the port, then the unit`,
+        ));
+        return false;
+      }
+      // usagePage 0xff06 is the vendor-defined page the frame interface uses.
+      const target = candidates.find((d) => d.usagePage === 0xff06) ?? candidates[0];
+
+      this.#device = new HID.HID(target.path);
+      this.#device.on('error', (e) => this.#fail(e));
+
+      this.#info = await this.#handshake();
+      this.#healthy = true;
+      this.#backoffMs = 1000;
+      this.#lastError = null;
+      console.log(
+        `[hid] open — PM=${this.#info?.pm ?? '?'} SUB=${this.#info?.sub ?? '?'}` +
+        `${this.#info?.short ? ' (short reply)' : ''}`,
+      );
+      return true;
+    } catch (err) {
+      this.#fail(err);
+      await this.close();
+      return false;
+    }
+  }
+
+  /**
+   * Write the init packet and read the reply.
+   *
+   * A missing or unparseable reply is NOT fatal. One documented firmware
+   * reboots on the init packet and streams without answering, and the panel is
+   * still perfectly writable in that state. Failing the open here would turn a
+   * quirk into a dead display, which is the opposite of what this project
+   * wants — so we log and continue.
+   */
+  async #handshake() {
+    this.#writeReport(buildInitPacket());
+    let resp = null;
+    try {
+      // node-hid's readTimeout takes ONLY a timeout; the report length comes
+      // from the descriptor. Passing (length, timeout) throws "readTimeout
+      // needs time out parameter" and silently skips the handshake.
+      resp = this.#device.readTimeout(1000);
+    } catch (err) {
+      console.warn(`[hid] handshake read failed (${err.message}) — continuing`);
+    }
+    const parsed = resp?.length ? parseHandshake(Buffer.from(resp)) : null;
+    if (!parsed) {
+      console.warn(
+        '[hid] no valid handshake reply — proceeding anyway. Some firmwares ' +
+        'reboot on init and stream without answering.',
+      );
+      return null;
+    }
+    return parsed;
+  }
+
+  /**
+   * One HID output report. hidapi requires a report-ID byte first; this device
+   * uses the default report, so that byte is 0x00 and a 512-byte chunk goes out
+   * as 513 bytes. Confirmed against the reference's HidApiTransport.
+   * @param {Buffer} chunk
+   */
+  #writeReport(chunk) {
+    const report = Buffer.alloc(chunk.length + 1);
+    chunk.copy(report, 1);              // report[0] stays 0x00
+    return this.#device.write(report);
   }
 
   /**
    * Push one frame.
+   *
+   * The frame MUST go out as a sequence of 512-byte reports, never one blob.
+   * The firmware latches only when it arrives that way: a single large write
+   * succeeds, reports every byte transferred, and leaves the panel on its boot
+   * logo. That is issue #150 in the reference implementation and it is the
+   * single easiest thing to get wrong here.
+   *
    * @param {Buffer} jpeg 1280x480 JPEG
-   * @returns {Promise<boolean>} false on a (non-fatal) failed write
+   * @returns {Promise<boolean>} false on a non-fatal failed write
    */
   async push(jpeg) {
-    void jpeg;
-    throw new Error('PanelTransport.push() not implemented — see header.');
+    const packet = buildFramePacket(jpeg, PANEL.width, PANEL.height);
+
+    if (DRY_RUN) {
+      const file = path.join(this.#frameDir, `frame-${Date.now()}.jpg`);
+      await fs.writeFile(file, jpeg);
+      return true;
+    }
+
+    if (!this.#device) return false;
+
+    try {
+      for (let offset = 0; offset < packet.length; offset += CHUNK) {
+        const chunk = packet.subarray(offset, offset + CHUNK);
+        const written = this.#writeReport(chunk);
+        // A short write is the real failure. Windows counts the report-ID byte,
+        // so a full chunk reports 513 — hence >=, not ===. An equality check
+        // here wrongly failed every Windows frame (reference issue #240).
+        if (written < chunk.length) {
+          this.#fail(new Error(`short write at offset ${offset}: ${written} bytes`));
+          return false;
+        }
+      }
+      await sleep(FRAME_SETTLE_MS);
+      this.#healthy = true;
+      return true;
+    } catch (err) {
+      // A panel that vanishes mid-write is the expected case on this hardware.
+      // Report unhealthy, drop the handle, and let the daemon keep rendering.
+      this.#fail(err);
+      await this.close();
+      return false;
+    }
+  }
+
+  /** Backoff for the daemon's reconnect loop. Doubles to 30s, then holds. */
+  get backoffMs() { return this.#backoffMs; }
+  noteReconnectFailure() {
+    this.#backoffMs = Math.min(this.#backoffMs * 2, 30_000);
+  }
+
+  #fail(err) {
+    this.#healthy = false;
+    this.#lastError = err;
+    console.error(`[hid] ${err.message}`);
   }
 
   async close() {
+    if (this.#device) {
+      try { this.#device.close(); } catch { /* already gone */ }
+    }
     this.#device = null;
     this.#healthy = false;
   }
 }
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const hex = (n) => '0x' + n.toString(16).padStart(4, '0');
 
 export const PANEL = { width: 1280, height: 480, vid: VID, pid: PID };
