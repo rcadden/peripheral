@@ -35,7 +35,12 @@ Sprints are thematic, not time-boxed. `- [x]` marks done; nothing is deleted.
 - [ ] Implement `ApiProvider.fetchToday()` — `events.list` per mapped calendar,
       `singleEvents=true`, drop cancelled, treat declined as absent
 - [ ] **Real calendar data behind `/api/state`, single work account**
-- [ ] Confirm Windows enumerates `0416:5302` on arrival (`npm run probe`)
+- [x] Confirm Windows enumerates `0416:5302` on arrival
+      *(2026-08-17, a day early. Enumerates cleanly. Frame channel measured:
+      interface 0, ep 0x82 OUT INTERRUPT, 512-byte packets. Interface 1 is a
+      zero-endpoint WinUSB decoy. Nothing written to the device yet.)*
+- [ ] **Read the handshake + frame header off the protocol reference** — the last
+      unknowns before any byte is written. Do not guess; 19% one-star failure rate
 - [ ] **HID transport: JPEG frame push at 1 fps**
 - [ ] Playwright renderer: screenshot localhost → JPEG → transport
 - [ ] Daemon: wire sources → state → render → push, with last-good-state cache

@@ -126,6 +126,24 @@ pushes a frame to real glass.
   `connection: close`, and shutdown drops keep-alive sockets so the process
   exits. Caught by testing the favicon case rather than by reading the code.
 
+- **Hardware arrived and was probed, 2026-08-17** — a day early. Enumerates
+  cleanly at `0416:5302`. Nothing written to the device.
+  - **The JPEG-over-HID assumption is confirmed.** Frame channel is interface 0,
+    endpoint `0x82` OUT INTERRUPT, **512-byte packets**; endpoint `0x83` IN
+    INTERRUPT carries 8-byte packets, presumably status. HID usage is vendor
+    defined (`0xff06` / `0x0001`), and both manufacturer and product strings read
+    `USBDISPLAY`.
+  - **Interface 1 is a decoy.** Windows binds WinUSB to a second vendor-specific
+    interface and labels it `USBDISPLAY`, which initially looked like the real
+    frame path. It has **zero endpoints** and cannot carry data. Recorded in
+    `hid.js` so it isn't chased again.
+  - The 512-byte packet size sets the chunk size: a 1280×480 JPEG at ~50–150KB is
+    ~100–300 writes per frame, unremarkable at 1 fps.
+  - `node-hid` is therefore the right binding, and the runtime decision holds.
+  - Probe dependencies were installed to a scratch directory **outside OneDrive**
+    rather than into the repo, per the sync-lock lesson. The repo is still a bare
+    clone with no `node_modules`.
+
 ### Known unknowns
 - **Whether Balcom permits third-party OAuth app access.** The entire calendar
   plan rests on this one untested assumption. If it is blocked, the only
@@ -134,6 +152,11 @@ pushes a frame to real glass.
 - Real `calendarId` values. A shared-in calendar's id is usually the sharer's
   address, but imported and secondary calendars use opaque ids. Enumerate with
   `calendarList.list` once a token exists; do not hardcode.
+- **The panel's handshake and frame header.** Endpoint geometry is now measured,
+  but the handshake sequence, the frame header's length/checksum layout, and
+  malformed-frame recovery behaviour are still unknown. These must be read off
+  the protocol reference, not guessed — the panel has a 19% one-star failure rate
+  and fuzzing it is how it becomes a paperweight.
 
 ## Decisions worth not relitigating
 

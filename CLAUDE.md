@@ -49,9 +49,21 @@ Rules that follow from it:
 |---|---|
 | Resolution | **1280×480**, fixed |
 | Connection | USB-C (9-pin internal USB header on a desktop) |
-| **Enumeration** | **USB HID — `VID:PID 0416:5302`. NOT a monitor.** |
-| Frame format | JPEG pushed over HID |
+| **Enumeration** | **USB HID — `VID:PID 0416:5302`. NOT a monitor.** Confirmed on hardware 2026-08-17. |
+| Frame format | JPEG pushed over HID — **confirmed** |
+| Frame channel | **Interface 0, ep `0x82` OUT INTERRUPT, 512-byte packets** |
+| Status channel | Interface 0, ep `0x83` IN INTERRUPT, 8-byte packets |
+| HID usage | usagePage `0xff06`, usage `0x0001` (vendor-defined) |
+| Strings | manufacturer and product both `USBDISPLAY` |
 | Mount | Magnetic back |
+
+**Arrived and connected 2026-08-17** — a day early. Enumerates cleanly; nothing
+has been written to it yet.
+
+**Interface 1 is a decoy.** The device exposes a second, vendor-specific
+interface that Windows binds WinUSB to and labels `USBDISPLAY`. It has **zero
+endpoints**, so it cannot carry frame data. Don't chase it; the frames go over
+HID interface 0.
 
 The OS never sees a second display. There is no window to maximise and no
 browser running on the device. Frames are rendered on the host and pushed.

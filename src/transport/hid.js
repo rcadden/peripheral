@@ -17,6 +17,35 @@
  *   4. Whether a header carries length/checksum, and its byte order
  *   5. Behaviour on malformed frames — does it recover or need a replug?
  *
+ * ── MEASURED ON REAL HARDWARE, 2026-08-17 ────────────────────────────────
+ * Device arrived a day early and enumerates cleanly. Descriptors read via
+ * libusb; nothing written to the device yet.
+ *
+ *   USB composite device, 1 config, 2 interfaces:
+ *
+ *   interface 0 — HID, vendor-defined (usagePage 0xff06, usage 0x0001)
+ *       ep 0x82  OUT  INTERRUPT  maxPacketSize 512   <- THE FRAME CHANNEL
+ *       ep 0x83  IN   INTERRUPT  maxPacketSize 8     <- status/ack, presumably
+ *
+ *   interface 1 — vendor-specific (class 255), ZERO endpoints
+ *       Windows binds WinUSB to it and names it "USBDISPLAY", which is a red
+ *       herring: an interface with no endpoints cannot carry frame data. It is
+ *       a discovery stub. Do not chase it.
+ *
+ *   node-hid path (interface 0):
+ *     \\?\HID#VID_0416&PID_5302&MI_00#8&16660c7e&0&0000#{4d1e55b2-...}
+ *     Enumerate it rather than hardcoding — the instance id changes per port.
+ *
+ * CONFIRMED: unknown #1 above is answered. Frames go over HID interface 0, and
+ * the 512-byte OUT endpoint sets the chunk size. A 1280x480 JPEG at ~50-150KB
+ * is therefore ~100-300 writes per frame, which at 1 fps is unremarkable.
+ * Manufacturer and product strings both read "USBDISPLAY".
+ *
+ * STILL UNKNOWN, and still must not be guessed: the handshake (#2), the frame
+ * header/length/checksum layout (#4), and malformed-frame behaviour (#5).
+ * Read those off the protocol reference before writing a single byte. This
+ * panel has a 19% one-star failure rate; do not fuzz it.
+ *
  * Design constraints that are NOT negotiable:
  *   - Never throw into the daemon loop. A panel that vanishes mid-write is the
  *     expected case on this hardware, not an exception. Report unhealthy and
