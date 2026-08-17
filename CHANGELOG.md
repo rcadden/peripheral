@@ -439,6 +439,44 @@ pushes a frame to real glass.
     hero.** The panel has no scrollbar and no second chance.
   - Test count 30 → 38.
 
+- **Type scale up 2px across the board, and the accents moved to blue**
+  (2026-08-17). Both judged on the real panel on a real desk, which is the only
+  place either question can be answered.
+  - The smallest type (11px `STALE` badge) was unreadable at distance. Every
+    `font-size` in `agenda.css` is up by 2px; the layout still fits 480px with
+    six agenda rows.
+  - `--accent-hero` used to take the wallpaper's **complement**, which against
+    a blue wallpaper (dominant hue 208) produced an acid yellow-green
+    `#d9f325` — maximally legible and, in Ricky's words, obnoxious. Accent hues
+    are now **pinned**; only ground and text still inherit from the wallpaper.
+  - **First blue attempt was wrong and the reason is worth keeping.** Pinning
+    the hue to blue under the existing uniform 7:1 floor produced a pale cyan
+    `#47cff5` — "a little too light". The floor was the cause, not the hue:
+    relative luminance weights blue at 0.0722 against green's 0.7152, so
+    forcing a saturated blue to 7:1 drags it toward cyan and then toward
+    pastel. Measured: hue 212 at 85% saturation first clears 7:1 at lightness
+    0.64, by which point it is `#559ef1`.
+  - **Fixed by making the floor per-role rather than uniform** — `--accent-hero`
+    is now gated at 4.5:1. That is not a relaxation of the contrast principle,
+    it is the principle applied to the size the token is actually used at: the
+    countdown is 106px, where WCAG's large-text AAA threshold is 4.5:1, and the
+    smallest use is a 22px agenda row where 4.5:1 is AA for normal text.
+    `--text-faint` already had a role-specific floor of 3.0 for the same kind
+    of reason.
+  - Result: `--accent-hero` `#0d78f2` at 4.67:1, `--accent-cool` `#79a1c8` at
+    7.25:1. The two accents are now **one hue family separated by saturation
+    and lightness** rather than by hue, because they sit on adjacent rows in
+    the agenda list and a 20-degree hue difference does not survive 6.86" at
+    three feet.
+- **`workingLocation` confirmed unwanted, `focusTime` and `outOfOffice`
+  confirmed wanted** (2026-08-17) — Ricky, directly. The code already matched;
+  this records that it is a decision rather than a guess.
+- **No flicker observed in normal use** (2026-08-17, Ricky, on the glass). The
+  push-rate shortfall recorded earlier was measured only while this session's
+  own concurrent test processes were running. Downgraded from a suspected
+  defect to a load-sensitivity note — but not closed, because the mechanism
+  (render and push timers sharing one event loop) is still unexamined.
+
 ### Known unknowns
 - ~~**Whether Balcom permits third-party OAuth app access.**~~ **ANSWERED
   2026-08-17: no for third-party, yes for internal.** A personal-project client

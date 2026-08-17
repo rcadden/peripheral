@@ -47,7 +47,7 @@ body {
   display: flex;
   align-items: center;
   gap: 9px;
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 600;
   letter-spacing: 0.34em;
   color: var(--text-faint);
@@ -68,14 +68,14 @@ body {
 .bar-right { display: flex; align-items: center; gap: 14px; }
 
 .clock {
-  font-size: 15px;
+  font-size: 17px;
   letter-spacing: 0.2em;
   color: var(--text-dim);
   font-variant-numeric: tabular-nums;
 }
 
 .badge {
-  font-size: 11px;
+  font-size: 13px;
   letter-spacing: 0.18em;
   color: var(--ground);
   background: var(--stale);
@@ -95,7 +95,7 @@ body {
 }
 
 .eyebrow {
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 600;
   letter-spacing: 0.3em;
   text-transform: uppercase;
@@ -108,7 +108,7 @@ body {
 .hero { display: flex; flex-direction: column; min-width: 0; }
 
 .countdown {
-  font-size: 104px;
+  font-size: 106px;
   line-height: 0.86;
   font-weight: 700;
   letter-spacing: -0.02em;
@@ -118,8 +118,8 @@ body {
 }
 
 /* Longer strings ("IN 2 HR 40 MIN") must not clip the fixed-width panel. */
-.countdown.len-md { font-size: 78px; }
-.countdown.len-lg { font-size: 58px; letter-spacing: 0; }
+.countdown.len-md { font-size: 80px; }
+.countdown.len-lg { font-size: 60px; letter-spacing: 0; }
 
 /* An event happening right now is the one state that should feel different. */
 .countdown.is-now { color: var(--ground); background: var(--accent-hero);
@@ -127,7 +127,7 @@ body {
 
 .title {
   margin-top: 20px;
-  font-size: 37px;
+  font-size: 39px;
   line-height: 1.12;
   font-weight: 500;
   letter-spacing: -0.005em;
@@ -141,7 +141,7 @@ body {
 
 .meta {
   margin-top: auto;
-  font-size: 20px;
+  font-size: 22px;
   letter-spacing: 0.04em;
   color: var(--text-dim);
   font-variant-numeric: tabular-nums;
@@ -181,7 +181,7 @@ body {
   grid-template-columns: 13px 104px 1fr;
   align-items: baseline;
   gap: 0 12px;
-  font-size: 20px;
+  font-size: 22px;
   letter-spacing: 0.01em;
   color: var(--text-dim);
   white-space: nowrap;
@@ -212,14 +212,14 @@ body {
    meeting for attention. "ALL DAY" is tracked out to read as a label rather
    than as a mis-set clock time in the same column. */
 .event.is-allday { color: var(--text-faint); }
-.event.is-allday .when { color: var(--text-faint); font-size: 15px; letter-spacing: 0.08em; }
+.event.is-allday .when { color: var(--text-faint); font-size: 17px; letter-spacing: 0.08em; }
 .event.is-allday .tick {
   background: transparent;
   box-shadow: inset 0 0 0 1px var(--text-faint);
   transform: rotate(45deg);
 }
 
-.empty { font-size: 20px; color: var(--text-faint); letter-spacing: 0.04em; }
+.empty { font-size: 22px; color: var(--text-faint); letter-spacing: 0.04em; }
 
 /* ── footer progress ─────────────────────────────────────────────────────── */
 

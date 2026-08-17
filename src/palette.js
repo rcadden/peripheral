@@ -31,7 +31,58 @@ export const WALLPAPER_PATH = path.join(
  * tiers well above it because this is glanced at, not read. The faint tier is
  * intentionally below AA — it carries events already in the past, where low
  * salience IS the information. */
-const GATE = { hero: 7.0, cool: 7.0, text: 7.0, dim: 4.5, faint: 3.0 };
+const GATE = { hero: 4.5, cool: 7.0, text: 7.0, dim: 4.5, faint: 3.0 };
+
+/* Why --accent-hero's floor is 4.5 and not 7.0 (lowered 2026-08-17).
+ *
+ * A 7:1 floor cannot be met by a saturated blue. Luminance weights green at
+ * 0.7152 and blue at 0.0722, so pushing a blue to 7:1 against a near-black
+ * ground forces it toward cyan and then toward pastel — measured: hue 212 at
+ * 85% saturation only reaches 7:1 at lightness 0.64, by which point it is
+ * #559ef1. The first blue palette shipped #47cff5 for exactly this reason and
+ * Ricky's verdict was "a little too light". The gate was the cause, not the
+ * hue choice.
+ *
+ * 4.5:1 is the right floor for this token because of the SIZES IT IS USED AT:
+ *   - the countdown is 106px, and the NOW badge is 106px on a filled block.
+ *     WCAG treats anything ≥24px as large text: AA is 3:1, AAA is 4.5:1. So
+ *     4.5 clears AAA with room to spare on the element that dominates the panel.
+ *   - the smallest use is a 22px agenda row, where 4.5:1 is AA for normal text.
+ * The old uniform 7.0 was a single number applied to roles with very different
+ * type sizes. This is not a relaxation of the principle — it is the principle
+ * applied per role, which is what --text-faint's 3.0 floor already did.
+ *
+ * --accent-cool stays at 7.0. It is the quieter of the two and desaturating it
+ * to reach that floor is exactly the subordinate reading we want.
+ */
+
+/* ── HUE POLICY — the third clause ───────────────────────────────────────
+ * "Wallpaper proposes, contrast vetoes" — and now: Ricky overrules.
+ *
+ * The accents used to take the wallpaper's DOMINANT hue for --accent-cool and
+ * its COMPLEMENT for --accent-hero. That is a sound way to guarantee the two
+ * accents are told apart, and against the measured wallpaper (dominant 208,
+ * blue) it produced a complement of ~70 — an acid yellow-green, #d9f325.
+ * It was maximally legible and, in Ricky's words, obnoxious. Judged on a real
+ * panel on a real desk, 2026-08-17.
+ *
+ * So the accent hues are now PINNED, and only ground/text still inherit from
+ * the wallpaper. Both accents are blue; they are separated by hue distance
+ * plus a deliberate lightness split instead of by complement:
+ *
+ *   --accent-hero  ice/cyan, brighter — NOW, the countdown, the progress fill
+ *   --accent-cool  periwinkle, calmer — the next event, the work calendar dot
+ *
+ * They appear on ADJACENT ROWS in the agenda list (is-now above is-next), so
+ * "both are blue" is a real constraint, not a free choice. 35 degrees apart
+ * with different lightness is the minimum that still reads as two colours at
+ * 6.86" from three feet. Do not narrow it without looking at the glass.
+ *
+ * Override per-run if you want to experiment; the contrast gate still applies
+ * to whatever you pick, so you cannot produce an unreadable panel this way.
+ */
+const HERO_HUE = Number(process.env.PERIPHERAL_HERO_HUE ?? 212);
+const COOL_HUE = Number(process.env.PERIPHERAL_COOL_HUE ?? 210);
 
 /* ── colour maths ───────────────────────────────────────────────────────── */
 
@@ -141,6 +192,10 @@ export async function sampleWallpaper(file = WALLPAPER_PATH) {
 
 export function deriveTokens({ dominantHue, secondaryHue, meanSat }) {
   const hD = dominantHue;
+  // Still sampled and still reported, but no longer feeds a token — the accent
+  // hues are pinned. Kept in the report because it is the number that explains
+  // where the old yellow came from, and it is what you would restore if the
+  // complementary scheme is ever revisited.
   const hS = secondaryHue;
 
   // Ground: dominant hue, lightness pinned near black. A touch of the hue keeps
@@ -155,8 +210,19 @@ export function deriveTokens({ dominantHue, secondaryHue, meanSat }) {
   // where a 0.55 floor produced a visibly muddy #66a3d6.
   const accentSat = clamp(Math.max(meanSat, 0.78) * 1.15, 0.70, 1.0);
 
-  const hero = gated(hS, accentSat, 0.55, groundRgb, GATE.hero);
-  const cool = gated(hD, accentSat, 0.62, groundRgb, GATE.cool);
+  /* Accent hues are pinned (see HUE_POLICY above); the wallpaper no longer
+   * reaches them. Start lightnesses differ so the two blues separate by
+   * brightness as well as hue — `gated` only ever raises lightness, so these
+   * are floors, and the hero stays the brighter of the two after gating. */
+  /* The two accents are now the SAME hue family, separated by saturation and
+   * lightness rather than by hue. Deep and vivid = happening now; pale and
+   * desaturated = merely next. That hierarchy survives at 6.86" from three
+   * feet, where a 20-degree hue difference does not.
+   *
+   * `gated` only ever raises lightness, so these start values are floors: the
+   * hero starts deep and stays deep because 4.5:1 is already met there. */
+  const hero = gated(HERO_HUE, clamp(accentSat, 0.85, 1.0), 0.50, groundRgb, GATE.hero);
+  const cool = gated(COOL_HUE, 0.42, 0.62, groundRgb, GATE.cool);
   const text = gated(hD, 0.16, 0.93, groundRgb, GATE.text);
   const dim = gated(hD, 0.12, 0.60, groundRgb, GATE.dim);
   const faint = gated(hD, 0.10, 0.42, groundRgb, GATE.faint);

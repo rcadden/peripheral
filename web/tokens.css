@@ -1,26 +1,26 @@
 /* ─────────────────────────────────────────────────────────────────────────
    tokens.css — GENERATED. Do not hand-edit; `npm run palette` overwrites.
 
-   Sampled 2026-08-17T12:58:37.023Z from the current wallpaper.
-     dominant hue 207.5deg · secondary hue 67.5deg · mean sat 0.439
+   Sampled 2026-08-17T18:45:18.942Z from the current wallpaper.
+     dominant hue 202.5deg · secondary hue 202.5deg · mean sat 0.478
 
    Hue comes from the wallpaper. Lightness is forced, then gated:
-     --accent-hero   15.8:1  (floor 7)
-     --accent-cool   7.49:1  (floor 7)
-     --text         16.81:1  (floor 7)
-     --text-dim      6.86:1  (floor 4.5)
-     --text-faint    3.67:1  (floor 3, de-emphasised tier)
+     --accent-hero   4.67:1  (floor 4.5)
+     --accent-cool   7.25:1  (floor 7)
+     --text         16.84:1  (floor 7)
+     --text-dim      6.96:1  (floor 4.5)
+     --text-faint    3.74:1  (floor 3, de-emphasised tier)
    ───────────────────────────────────────────────────────────────────────── */
 
 :root {
-  --ground: #070b0e;
-  --ground-2: #12191e;
-  --rule: #1d262d;
-  --text: #eaedf0;
-  --text-dim: #8d9aa5;
-  --text-faint: #606c76;
-  --accent-hero: #d9f325;
-  --accent-cool: #47a5f5;
+  --ground: #070c0e;
+  --ground-2: #121a1e;
+  --rule: #1d272d;
+  --text: #eaeef0;
+  --text-dim: #8d9ca5;
+  --text-faint: #606e76;
+  --accent-hero: #0d78f2;
+  --accent-cool: #79a1c8;
   --stale: #d98a3d;
 
   /* geometry — the panel is a fixed 1280x480 of glass */

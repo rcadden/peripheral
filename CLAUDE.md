@@ -251,10 +251,22 @@ interchangeably. Nothing else in the build depends on which one we get.
 ## Brand & Design
 - **Aesthetic:** flat near-black ground, monospace throughout, no gradients
   beyond a sub-3% vertical lift, no photographic background.
-- **Palette is derived from the current Windows wallpaper** — but **hue only.**
-  Lightness is forced and every token is gated on contrast against the ground
-  before it ships (`--accent-*` ≥ 7:1, `--text-dim` ≥ 4.5:1, `--text-faint`
-  ≥ 3:1). **Wallpaper proposes, contrast vetoes.** See `src/palette.js`.
+- **Palette:** ground and text hues are derived from the current Windows
+  wallpaper; **the accent hues are pinned** (`HERO_HUE` / `COOL_HUE` in
+  `src/palette.js`, overridable per run). Lightness is always forced and every
+  token is gated on contrast against the ground before it ships.
+  **Wallpaper proposes, contrast vetoes, Ricky overrules.**
+- **Contrast floors are per role, not uniform** — `--accent-hero` ≥ 4.5:1,
+  `--accent-cool` ≥ 7:1, `--text` ≥ 7:1, `--text-dim` ≥ 4.5:1, `--text-faint`
+  ≥ 3:1. The hero's floor is lower *because of the size it is used at*: the
+  countdown is 106px, where WCAG's large-text AAA threshold is 4.5:1. A uniform
+  7:1 is not achievable by any saturated blue — luminance weights blue at
+  0.0722, so the gate drags it to cyan and then to pastel. That is exactly how
+  the first blue attempt produced a washed-out `#47cff5`.
+- **The accents are two shades of one hue family**, separated by saturation and
+  lightness rather than hue. They land on adjacent rows in the agenda list
+  (`is-now` above `is-next`), and a 20-degree hue difference does not survive
+  6.86" read from three feet.
 - Regenerate with `npm run palette`. `web/tokens.css` is generated — never
   hand-edit it.
 - Type scale is tuned for 6.86" read from ~3 feet, not for a desktop monitor.
