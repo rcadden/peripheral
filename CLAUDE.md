@@ -39,6 +39,13 @@ the entire fetch path in one go.
 > method, and the open questions that need Ricky.
 
 ## Session-end ritual — changelog first, handoff derived
+**Run `/session-close`** (`.claude/skills/session-close/`). It carries the full
+checklist: a blocking verification gate, roadmap sync, changelog, lessons,
+memory, commit, a derived handoff, and confirming the daemon is still running.
+Adapted from Drywater's equivalent, 2026-08-17.
+
+The rule the skill exists to enforce:
+
 **Write [`CHANGELOG.md`](CHANGELOG.md) before touching the handoff, then rewrite
 the handoff's next-actions from it.** The changelog is the source of truth for
 *what happened*; the handoff is a derived view of *what to do next*.
@@ -57,6 +64,9 @@ Rules that follow from it:
 - Log panel failures **with dates** — see the hardware-risk note at the bottom of
   the changelog. If this thing dies at week three, that date is the evidence
   that justifies the decoupled transport.
+- Each session gets a **new** dated handoff at
+  `docs/plans/session-handoff-YYYY-MM-DD[letter].md` that names the file it
+  supersedes. Previous handoffs are never edited and never deleted.
 
 ## Hardware — read this before touching the transport
 **Thermalright Trofeo Vision LCD 6.86" Black Edition** ($37.90, Amazon
