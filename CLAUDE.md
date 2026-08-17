@@ -39,7 +39,7 @@ This is why the renderer is decoupled from the transport (see below).
 ## Tech Stack
 | Layer | Choice | Why |
 |---|---|---|
-| Runtime | **Node 22+ ESM, plain JS** | Python is NOT installed on this machine (the `python.exe` on PATH is the Microsoft Store stub alias) and `uv` is absent. Node 24.13.1 is present. Panes are HTML/CSS/JS regardless — one language, no build step. |
+| Runtime | **Node 22+ ESM, plain JS** | One language across daemon and panes, no build step, no venv. See the dated correction in Lessons Learned — the original rationale was wrong. |
 | Server | `node:http`, zero deps | Runs on a bare clone with no `npm i`. |
 | Renderer | Playwright Chromium → JPEG | Design in HTML/CSS, iterate in a real browser at true size. |
 | Transport | `node-hid` | Pushes JPEG frames to `0416:5302`. |
@@ -113,9 +113,28 @@ interchangeably. Nothing else in the build depends on which we get.
   Keep `node_modules`, Playwright browsers, and caches out of sync scope or
   expect intermittent EPERM/EBUSY. Playwright's browser download is redirected
   via `PLAYWRIGHT_BROWSERS_PATH` — see `.env.example`.
-- **2026-08-17 — Don't trust `python` on PATH on Windows.** It resolves to the
-  Microsoft Store stub alias, which prints an install message and exits 49 —
-  it does not fail like a missing command. Verify with `python --version`.
+- **2026-08-17 — Don't trust `python` on PATH on Windows; the launcher is `py`.**
+  `python.exe` resolves to the Microsoft Store stub alias, which prints an
+  install message and exits 49 — it does not fail like a missing command.
+  `py` is the real launcher. This was already recorded in
+  `Agent_Memory/agent_memory.md` under Spotify History; I should have read it
+  before concluding anything about Python.
+- **2026-08-17 — CORRECTION to the runtime rationale.** The stack table
+  originally justified Node by claiming *"Python is NOT installed."* **That was
+  wrong.** Python **3.14.2** is installed and reachable via `py`, with pip 25.3
+  (`C:\Users\grcad\AppData\Local\Python\pythoncore-3.14-64`). Only `uv` is
+  genuinely absent. The decision to use Node stands, but on these grounds
+  instead:
+    1. The panes are HTML/CSS/JS no matter what, so Node means one language
+       end to end rather than a Python daemon shelling to a JS frontend.
+    2. The server is dependency-free and already runs on a bare clone — no
+       venv, no install step to get a look at the design.
+    3. Python 3.14 is very new; native wheels (`hidapi`, imaging) frequently
+       lag a fresh CPython release, and the transport depends on a native
+       binding. `node-hid` on Node 24 is the lower-risk path.
+  If the HID protocol turns out to be painful in Node, the two Python
+  reference implementations are a legitimate fallback — this is a preference,
+  not a constraint.
 - **2026-08-17 — Reddit is unreachable via WebFetch and blocked in the in-app
   browser, but loads in Chrome via `old.reddit.com`.** The modern React
   reddit.com renders blank to automation; `old.reddit.com` is server-rendered
