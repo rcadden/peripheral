@@ -393,17 +393,72 @@ pushes a frame to real glass.
     id under Security → API controls → App access control.
   - **Untested as of this writing.**
 
+- **REAL EVENTS ON REAL GLASS, 2026-08-17.** The panel is showing Ricky's
+  actual day. The North Star is functionally met.
+  - **Route 1a works.** An OAuth client owned by a Cloud project inside
+    `balcomagency.com` is an *internal app* and consented without incident.
+    The personal-project client was blocked; the in-org one was not. Same
+    scopes, same account, same code — only project ownership differed.
+  - **The work-as-primary design is validated.** One token against Balcom
+    returned **8 calendars**, and `grcadden@gmail.com` came back with
+    `accessRole: owner` — **full event titles, not free/busy.** Personal events
+    ("Norah vball", "Reese vball practice") render with real names. Google does
+    the merge server-side exactly as the 2026-08-17 revision predicted. No
+    second token, no client-side reconciliation.
+  - First live fetch: **19 events**, work and personal interleaved, Meet and
+    Zoom both detected correctly from real invites.
+  - **Three of eight calendars are on the panel** — work, personal, and the
+    TripIt travel feed. The other five are colleagues' calendars (Nick, Alex,
+    Brittany, Steve) and a shared team calendar, visible for scheduling.
+    Putting a direct report's 1:1s on this panel would bury Ricky's own next
+    meeting under other people's days, which is precisely the failure the
+    North Star names. `steve.cantrell@` is free/busy only and would have
+    rendered as a wall of "Busy" besides. Reasoning recorded in `.env`.
+
+- **Three defects that only real data could reveal** (2026-08-17). Mock data
+  was well-formed; a live work calendar is not.
+  - **The hero showed the wrong live event.** Focus picked the earliest-
+    starting current event, so at 2:20pm a 1–3pm block outranked a 2:00–2:30
+    meeting — the panel displayed the thing with 40 minutes left instead of the
+    thing he had to leave in 10. Among concurrent events the one **ending
+    soonest** now wins: that is the one with a deadline, and a deadline is the
+    only thing worth a countdown.
+  - **Google's `workingLocation` events took a row every weekday.** They
+    rendered as an all-day entry reading "Home" — the where-are-you-working
+    banner, not something that happens at a time. Dropped, along with
+    `birthday` and `fromGmail`, which are all-day and derived rather than
+    scheduled. **`outOfOffice` and `focusTime` are deliberately kept**: that is
+    time Ricky blocked, and hiding it would tell him he is free when he decided
+    he was not.
+  - **An autocompleted postal address broke the layout.** Google stores
+    "Asheville Christian Academy" as the venue plus street, city, state, ZIP and
+    country; the meta line wrapped to three lines and pushed through the
+    progress bar. Locations are now trimmed to the venue name — you do not read
+    a ZIP code from three feet — with a two-line CSS clamp as a hard backstop,
+    because **no field from a calendar invite may ever be able to reflow the
+    hero.** The panel has no scrollbar and no second chance.
+  - Test count 30 → 38.
+
 ### Known unknowns
-- **Whether Balcom permits third-party OAuth app access.** The entire calendar
-  plan rests on this one untested assumption. If it is blocked, the only
-  remaining route is ICS, which refreshes every 8–24h and reduces the countdown
-  from a number to a rough indicator.
-- **Whether `ApiProvider.fetchToday()` works against real Google.** It is
-  written, and the transform is covered by fixtures, but **not one line of it
-  has made a network call.** The field names, the shape of a shared-in
-  calendar's events, and whether the personal calendar arrives with full details
-  or only free/busy are all still assumptions. The first `npm run auth` is the
-  experiment for all of them at once.
+- ~~**Whether Balcom permits third-party OAuth app access.**~~ **ANSWERED
+  2026-08-17: no for third-party, yes for internal.** A personal-project client
+  is blocked (`admin_policy_enforced`); a client owned by an in-org Cloud
+  project consents normally. ICS is no longer needed and route 3 can stay
+  unbuilt.
+- ~~**Whether `ApiProvider.fetchToday()` works against real Google.**~~
+  **ANSWERED 2026-08-17: it does.** 19 real events on the first live fetch,
+  Meet and Zoom detected from real invites, personal calendar arriving with
+  full titles. Three defects surfaced immediately and are fixed — see above.
+  The fixtures did their job on the transform and were silent on everything
+  real data does differently, which is the honest limit of a fixture.
+- **Whether the token survives long-term.** The refresh path has never run —
+  the access token is under an hour old. Internal apps have no 7-day expiry,
+  but that is documentation, not observation. First real test is tomorrow
+  morning.
+- **Whether an all-day event now behaves correctly on the panel.** The
+  hero-hijack fix has still never been exercised by real data: the only all-day
+  event the account produced was a `workingLocation` entry, which is now
+  dropped before it reaches the pane. The path is tested, not observed.
 - **Whether the push loop holds up when the PC is busy.** Undisturbed, the
   daemon pushes **28–30 frames per 30s heartbeat with 0 failures** (100s run).
   But during this session's own testing — several concurrent PowerShell and npm

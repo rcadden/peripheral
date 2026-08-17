@@ -94,6 +94,24 @@ test('an event with no attendee list cannot be declined', () => {
   assert.equal(isDeclined(timed()), false);
 });
 
+test('Google calendar-metadata event types are dropped', () => {
+  // Seen on first contact with the real account: a `workingLocation` event
+  // titled "Home" took an all-day row on the panel every weekday. It is the
+  // where-are-you-working banner, not something that happens at a time.
+  for (const eventType of ['workingLocation', 'birthday', 'fromGmail']) {
+    assert.equal(normaliseEvent(timed({ eventType, summary: 'Home' }), 'work'), null, eventType);
+  }
+});
+
+test('outOfOffice and focusTime are KEPT — they are real blocked time', () => {
+  // Hiding these would tell Ricky he is free during time he decided he wasn't.
+  // They should not outrank a live meeting for the hero, but that is a
+  // focus-selection concern in the pane, not a reason to discard the data.
+  for (const eventType of ['outOfOffice', 'focusTime', 'default', undefined]) {
+    assert.ok(normaliseEvent(timed({ eventType }), 'work'), String(eventType));
+  }
+});
+
 test('a malformed event with neither dateTime nor date is skipped, not thrown', () => {
   assert.equal(normaliseEvent(timed({ start: {} }), 'work'), null);
 });

@@ -145,6 +145,15 @@ body {
   letter-spacing: 0.04em;
   color: var(--text-dim);
   font-variant-numeric: tabular-nums;
+  /* Hard backstop. shortLocation() trims the common case, but no field from a
+     calendar invite may ever be able to reflow the hero into the progress bar
+     — the panel has no scrollbar and no second chance. Seen on first contact
+     with real data: an autocompleted postal address wrapped this to three
+     lines and pushed it through the footer. Two lines, then ellipsis. */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .meta .sep { color: var(--text-faint); margin: 0 10px; }

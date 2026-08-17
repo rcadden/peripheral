@@ -10,6 +10,19 @@ Success in one sentence: **Ricky stops opening Google Calendar to find out
 whether he has a meeting soon.**
 
 ## Status
+**Sprint 1 complete — the panel shows Ricky's real day.** Work and personal
+calendars merged server-side through one in-org OAuth token, rendered at
+1280×480, pushed over HID at 1 fps, started automatically at logon.
+
+Route 1a (OAuth client owned by a Cloud project **inside** `balcomagency.com`)
+is the answer. A personal-project client is blocked by Workspace policy; an
+in-org one is an internal app and is trusted by default. ICS is dead as a
+fallback and does not need building.
+
+Next: whatever Sprint 2 turns out to be. See the handoff.
+
+<!-- Superseded 2026-08-17, kept per the no-tidying rule: -->
+<details><summary>Previous status (pre-OAuth)</summary>
 Sprint 1 — Foundation, essentially complete. Hardware arrived and works; the
 loop is closed; the daemon **starts itself at logon**; the calendar fetch path
 is written end to end and covered by fixture tests.
@@ -18,9 +31,10 @@ is written end to end and covered by fixture tests.
 exist yet.** Nothing downstream of it is blocked — it is all written and
 waiting. `npm run auth` is the experiment, and it tests Workspace policy and
 the entire fetch path in one go.
+</details>
 
 > **Starting a session? Read
-> [`docs/plans/session-handoff-2026-08-17c.md`](docs/plans/session-handoff-2026-08-17c.md)
+> [`docs/plans/session-handoff-2026-08-17d.md`](docs/plans/session-handoff-2026-08-17d.md)
 > first.** It has the ordered next actions, what is verified and by what
 > method, and the open questions that need Ricky.
 

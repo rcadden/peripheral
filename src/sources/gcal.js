@@ -98,6 +98,26 @@ export function dayWindow(now = new Date()) {
  */
 
 /**
+ * Google `eventType` values that are calendar METADATA rather than events.
+ *
+ * `workingLocation` is the offender that showed up on first contact with the
+ * real account: it rendered as an all-day row reading "Home". It is how Google
+ * stores the where-are-you-working banner, it exists on most weekdays, and it
+ * is not something that happens at a time. On a six-row panel it costs a row
+ * every single day to say nothing.
+ *
+ * `birthday` and `fromGmail` are pre-emptive: both are all-day, both are
+ * derived rather than scheduled, and neither is a commitment.
+ *
+ * NOT dropped, deliberately: `outOfOffice` and `focusTime`. Those are time
+ * Ricky actually blocked, and an ambient panel that hides them would be
+ * telling him he is free when he decided he was not. They are real, so they
+ * stay — the fix for them is that they should not outrank a live meeting for
+ * the hero slot, which is a focus-selection problem, not a filtering one.
+ */
+const DROPPED_EVENT_TYPES = new Set(['workingLocation', 'birthday', 'fromGmail']);
+
+/**
  * Has the signed-in user declined this? A declined invite must not occupy the
  * hero slot — an event you said no to is not "up next". Treated as absent
  * rather than rendered dim, because the panel is read at a glance and a dim
@@ -140,6 +160,7 @@ export function detectConference(raw) {
 export function normaliseEvent(raw, label) {
   if (raw.status === 'cancelled') return null;
   if (isDeclined(raw)) return null;
+  if (DROPPED_EVENT_TYPES.has(raw.eventType)) return null;
 
   const allDay = Boolean(raw.start?.date);
   if (!allDay && !raw.start?.dateTime) return null; // malformed; skip quietly

@@ -74,6 +74,10 @@ function fmtCountdown(ms) {
 const CALENDARS = {
   work: { label: 'Balcom', tint: 'var(--accent-cool)' },
   personal: { label: 'Personal', tint: 'var(--accent-hero)' },
+  // TripIt feed on the work account — flights and hotels. An imported feed, so
+  // it refreshes on Google's schedule (8–24h) rather than in real time; fine
+  // for a flight tomorrow, not something to trust to the minute.
+  travel: { label: 'Travel', tint: 'var(--text-dim)' },
   athletics: { label: 'Athletics', tint: 'var(--text-dim)' },
   holidays: { label: 'Holidays', tint: 'var(--text-faint)' },
   other: { label: 'Other', tint: 'var(--text-dim)' },
@@ -167,8 +171,17 @@ function render() {
   const allDay = events.filter((e) => e.allDay);
   const timed = events.filter((e) => !e.allDay).map((ev) => ({ ...ev, phase: classify(ev, now) }));
 
-  // "Up next" = happening now if anything is, else the soonest future event.
-  const focus = timed.find((e) => e.phase === 'now') || timed.find((e) => e.phase === 'future');
+  /* "Up next" = happening now if anything is, else the soonest future event.
+   *
+   * Among concurrent events the one ENDING SOONEST wins, not the one that
+   * started first. Seen on the first real day of data: at 2:20pm a 1–3pm block
+   * and a 2:00–2:30 meeting were both live, and start-order handed the hero to
+   * the long block — so the panel showed the thing with 40 minutes left rather
+   * than the thing he had to leave in 10. Ending-soonest is the one with a
+   * deadline attached, which is the only one worth a countdown. */
+  const live = timed.filter((e) => e.phase === 'now')
+    .sort((a, b) => new Date(a.end) - new Date(b.end));
+  const focus = live[0] || timed.find((e) => e.phase === 'future');
 
   renderHero(focus, timed, allDay, now);
   renderList(timed, allDay, focus, now);
@@ -222,13 +235,34 @@ function renderHero(focus, marked, allDay, now) {
   if (CONF[focus.conference]) bits.push(CONF[focus.conference]);
   // A conference link pasted into the location field is already reported as
   // the conference; repeating the raw URL would eat the whole meta line.
-  if (focus.location && !/^https?:\/\//i.test(focus.location)) bits.push(focus.location);
+  if (focus.location && !/^https?:\/\//i.test(focus.location)) {
+    bits.push(shortLocation(focus.location));
+  }
   if (focus.attendeeCount) bits.push(`${focus.attendeeCount} people`);
 
   el.meta.innerHTML =
     `<span class="cal-dot" style="background:${cal.tint}"></span>`
     + `<span>${cal.label}</span><span class="sep">·</span>`
     + bits.map(esc).join('<span class="sep">·</span>');
+}
+
+/**
+ * Locations arrive as full postal addresses — Google autocompletes them, so
+ * "Asheville Christian Academy" is stored as "Asheville Christian Academy, 74
+ * Riverwood Rd, Swannanoa, NC 28778, USA". On first contact with real data
+ * that wrapped the meta line to three lines and pushed it into the progress
+ * bar.
+ *
+ * The venue name is the only part that helps at a glance. You already know
+ * which state you live in, and you are not reading a ZIP code from three feet.
+ * Keep the first comma-separated segment; fall back to a hard truncation for
+ * addresses that begin with a street number and have no name.
+ */
+function shortLocation(loc) {
+  const head = loc.split(',')[0].trim();
+  // A bare street address ("74 Riverwood Rd") is not a name — keep a bit more.
+  const useful = /^\d/.test(head) ? loc.split(',').slice(0, 2).join(',').trim() : head;
+  return useful.length > 38 ? `${useful.slice(0, 37)}…` : useful;
 }
 
 function renderList(marked, allDay, focus, now) {
