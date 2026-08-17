@@ -34,7 +34,7 @@ the entire fetch path in one go.
 </details>
 
 > **Starting a session? Read
-> [`docs/plans/session-handoff-2026-08-17d.md`](docs/plans/session-handoff-2026-08-17d.md)
+> [`docs/plans/session-handoff-2026-08-17e.md`](docs/plans/session-handoff-2026-08-17e.md)
 > first.** It has the ordered next actions, what is verified and by what
 > method, and the open questions that need Ricky.
 
@@ -303,6 +303,29 @@ interchangeably. Nothing else in the build depends on which one we get.
 - Type scale is tuned for 6.86" read from ~3 feet, not for a desktop monitor.
 
 ## Lessons Learned
+- **2026-08-17 — A local bug can masquerade as a remote policy decision.**
+  `openBrowser()` ran `cmd /c start "" <url>` unquoted, and **cmd treats `&` as
+  a command separator**, so the browser received only `...?client_id=XXX`.
+  Google replied `invalid_request: Required parameter is missing:
+  response_type` — an accurate description of what it got. An earlier attempt
+  produced *"This app is blocked"*, which was read as a Workspace restriction
+  and reported to Ricky as one. It was not evidence of anything.
+  What made it expensive: **the URL printed to the terminal was correct the
+  whole time, and pasting it by hand worked.** Only the auto-open path was
+  broken, so every symptom pointed outward at Google.
+  **Standing rule: before concluding that a remote system rejected you, verify
+  what you actually sent it.** A request you never inspected is not evidence
+  about the other end. Fixed with `rundll32 url.dll,FileProtocolHandler`, which
+  spawns directly and involves no shell; four tests now guard the argv shape.
+- **2026-08-17 — Mock data is well-formed by construction and will never warn
+  you.** Real calendars arrived with three things the mock had no concept of:
+  concurrent events (making "which live event is the hero" a real decision —
+  it is the one *ending soonest*, not starting first), Google's metadata event
+  types (`workingLocation` cost a row every weekday), and autocompleted postal
+  addresses long enough to reflow the layout through the progress bar.
+  **Standing rule: when a fixture is added for a case real data revealed, add
+  it to the MOCK too**, so the browser fallback exercises the same shape. The
+  mock now carries an all-day event for exactly this reason.
 - **2026-08-17 — A process can log `fatal`, keep running, and report success.**
   `main().catch()` set `process.exitCode = 1`, but by then the HTTP server was
   listening and the intervals were armed, so Node had work left and never

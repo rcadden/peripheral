@@ -477,6 +477,47 @@ pushes a frame to real glass.
   defect to a load-sensitivity note — but not closed, because the mechanism
   (render and push timers sharing one event loop) is still unexamined.
 
+- **`/session-close` command** (`.claude/commands/session-close.md`), adapted
+  from Drywater's, 2026-08-17. Same skeleton — blocking gate, documentation in
+  a fixed order, commit, cold-reader handoff — because that skeleton works.
+  What changed is everything downstream of what "shipping" means here.
+  - Drywater's Step 0 asks which release channel to ship to. Peripheral has no
+    channels, so its gate asks **what was actually verified and by what
+    method**, sorting every claim into seen-on-the-glass / rendered / measured
+    / tested / written-only. That is this project's recurring failure mode:
+    three separate times on 2026-08-17 the daemon reported perfect health while
+    something was wrong.
+  - The Discord dispatch step and all release execution were **dropped**, not
+    adapted. No audience, no channels.
+  - Drywater's final step is release execution; Peripheral's is **"leave the
+    panel lit"** — a session ending with a stopped daemon has shipped a dark
+    panel, and the failure is silent until Ricky glances up.
+  - Encodes two things that were previously habit and written nowhere: the
+    dated **superseding handoff** pattern (new file per session, previous never
+    edited), and the changelog-before-handoff ordering as an enforced step
+    order rather than an intention.
+  - Step 1 gained a **secret scan**, because `.env` holds a live client secret
+    and this repo goes public in Sprint 3. History is not cleaned later.
+- **Branching override, recorded in `CLAUDE.md`** (Ricky, 2026-08-17):
+  `/session-close` pushes `dev` **and fast-forwards `main`, without asking.**
+  This deliberately contradicts the global rule that `main` needs explicit
+  instruction, and the override is written down so a future session does not
+  "fix" it back. Peripheral's risk profile is not Drywater's — no paying
+  customers, no store review, no public build, one user on one machine, and
+  `main` is not deployed anywhere. Outside `/session-close` the normal rule
+  still applies. Mechanism is `git push origin dev:main`, which fast-forwards
+  without a local checkout and so avoids a branch switch on Windows while the
+  daemon holds the working tree open.
+- **The blue and the type scale are accepted PROVISIONALLY** (Ricky, on the
+  glass, 2026-08-17): *"The blue is OK for now, and the font size is improved.
+  Consider both closed, but not final — they're subject to change after using
+  it for a few days."* Recorded as a decision with an expiry rather than a
+  settled one; a revisit is queued on the roadmap so it happens on purpose
+  rather than only if something annoys him enough to mention it.
+- **The state cache round trip is confirmed against real data**, not just unit
+  tests: `[cache] restored 18 event(s) — serving stale until the first fetch`
+  fired three times across daemon restarts on 2026-08-17.
+
 ### Known unknowns
 - ~~**Whether Balcom permits third-party OAuth app access.**~~ **ANSWERED
   2026-08-17: no for third-party, yes for internal.** A personal-project client
@@ -497,6 +538,17 @@ pushes a frame to real glass.
   hero-hijack fix has still never been exercised by real data: the only all-day
   event the account produced was a `workingLocation` entry, which is now
   dropped before it reaches the pane. The path is tested, not observed.
+- **Whether the `travel` label renders at all.** The TripIt feed returned zero
+  events on the day it was wired up — 15 work, 3 personal, 0 travel — so that
+  calendar's label and tint have never appeared. Not a suspected defect, a
+  blind spot: nothing has disproved it either.
+- **Whether the push-rate shortfall matters.** Ricky reports **no flicker in
+  normal use** (2026-08-17, on the glass), which is the only evidence that can
+  settle the user-facing question, and it settles it in the good direction.
+  Left open anyway because the *mechanism* is unexamined — the render and push
+  timers share one event loop, which is precisely the coupling the two-loop
+  design was meant to eliminate. A quiet panel today does not prove a quiet
+  panel during a Teams call and a build.
 - **Whether the push loop holds up when the PC is busy.** Undisturbed, the
   daemon pushes **28–30 frames per 30s heartbeat with 0 failures** (100s run).
   But during this session's own testing — several concurrent PowerShell and npm

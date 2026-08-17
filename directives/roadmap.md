@@ -83,7 +83,11 @@ Sprints are thematic, not time-boxed. `- [x]` marks done; nothing is deleted.
       countdown and AA for the 22px agenda rows. Landed on `#0d78f2`, hero
       4.67:1, cool 7.25:1. The two accents are now the same hue family
       separated by saturation and lightness, because a 20-degree hue difference
-      does not survive 6.86" at three feet.)*
+      does not survive 6.86" at three feet.
+      **Accepted PROVISIONALLY, not finally** — Ricky, on the glass: "the blue
+      is OK for now, and the font size is improved… subject to change after
+      using it for a few days." Do not treat either as settled; a revisit is
+      expected and is not a regression.)*
 
 **Sprint 1 is complete.** The panel shows Ricky's real day.
 
@@ -119,6 +123,17 @@ Everything here came from living with real data on the real panel, 2026-08-17.
 - [ ] Revisit whether `focusTime` and `outOfOffice` should be able to take the
       hero slot. Kept deliberately — blocked time is real time — but a
       countdown to "Focus time" may read as noise. Decide after living with it.
+- [ ] **Re-decide the accent blue and the type scale after a few days of real
+      use.** Both were accepted provisionally on 2026-08-17, explicitly "not
+      final". Queued here so the revisit is a scheduled step rather than
+      something that only happens if Ricky remembers to complain.
+- [ ] **See the `travel` label render at least once.** The TripIt feed returned
+      zero events on the day it was wired up, so that calendar's label and tint
+      have never appeared on the panel. Not a known defect — a known blind spot.
+- [ ] **Watch an all-day event reach the panel.** The hero-hijack fix is tested
+      and was rendered from mock data, but the only real all-day event the
+      account produced was a `workingLocation` entry, which is now dropped
+      before the pane sees it. The fix has never been exercised by real data.
 
 ### New panes
 - [ ] Pane cycling with per-pane dwell times
