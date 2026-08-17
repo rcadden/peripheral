@@ -11,12 +11,35 @@ whether he has a meeting soon.**
 
 ## Status
 Sprint 1 — Foundation. Agenda pane renders at true size on mock data; palette
-extraction working. Hardware arrives **2026-08-18**; transport unwritten.
+extraction working. **Hardware arrives tomorrow, 2026-08-18** — transport is
+still unwritten, and `npm run probe` against a live device is the first thing to
+run when it lands. Work-calendar access remains the critical path and is not
+blocked on hardware; it can move today.
 
 > **Starting a session? Read
 > [`docs/plans/session-handoff-2026-08-17.md`](docs/plans/session-handoff-2026-08-17.md)
 > first.** It has the ordered next actions, the hardware-arrival checklist, what
 > is already verified, and the open questions that need Ricky.
+
+## Session-end ritual — changelog first, handoff derived
+**Write [`CHANGELOG.md`](CHANGELOG.md) before touching the handoff, then rewrite
+the handoff's next-actions from it.** The changelog is the source of truth for
+*what happened*; the handoff is a derived view of *what to do next*.
+
+The reason is drift. Both documents used to want updating at the end of a
+session, both described overlapping ground, and whichever came second got
+skipped — leaving two files that disagree about the state of the build. Deriving
+one from the other means there is a single place to write and no chance of a
+contradiction surviving a cold start.
+
+Rules that follow from it:
+- Nothing is deleted from the changelog. Corrections are appended with a date;
+  superseded text stays and is marked superseded.
+- Everything stays under `[Unreleased]` until the daemon pushes a frame to real
+  glass. `0.1.0` is unpublished.
+- Log panel failures **with dates** — see the hardware-risk note at the bottom of
+  the changelog. If this thing dies at week three, that date is the evidence
+  that justifies the decoupled transport.
 
 ## Hardware — read this before touching the transport
 **Thermalright Trofeo Vision LCD 6.86" Black Edition** ($37.90, Amazon

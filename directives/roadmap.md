@@ -6,7 +6,11 @@ Sprints are thematic, not time-boxed. `- [x]` marks done; nothing is deleted.
 ## Sprint 1 — Foundation
 - [x] Identify the hardware and its actual interface (HID `0416:5302`, not a monitor)
 - [x] Confirm which calendars are reachable from the personal Google account
-- [x] Decide the runtime (Node, not Python — Python isn't installed)
+- [x] Decide the runtime — Node, not Python
+      *(2026-08-17: the original reason recorded here, "Python isn't installed,"
+      was wrong — Python 3.14.2 is installed and reachable via `py`. The
+      decision stands on one language end to end plus native-binding risk on a
+      very new CPython. See the dated correction in `CLAUDE.md`.)*
 - [x] Local server serving panes from `web/`, `/api/state` endpoint
 - [x] Agenda pane rendering at true 1280×480 on mock data, live countdown
 - [x] Wallpaper → palette extraction with a hard contrast gate
