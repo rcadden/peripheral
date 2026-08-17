@@ -132,7 +132,9 @@ the contract.
 | Value | Status |
 |---|---|
 | Google OAuth client ID / secret | **NOT YET CREATED.** Create as **Desktop app** in a *personal* Cloud project, not Balcom's. Flow is written — `npm run auth`. |
-| Token store | `%LOCALAPPDATA%\Peripheral\tokens.json` — **outside the repo on purpose.** The repo is in OneDrive; a refresh token must not sync to Microsoft. Override with `PERIPHERAL_TOKEN_PATH`. |
+| Repo location | **`C:\dev\peripheral`** — deliberately NOT in OneDrive. See Lessons Learned. |
+| Remote | `github.com/rcadden/peripheral` — **private** until Sprint 3, then public. |
+| Token store | `%LOCALAPPDATA%\Peripheral\tokens.json` — **outside the repo on purpose.** A refresh token has no business in a project directory. Override with `PERIPHERAL_TOKEN_PATH`. |
 | Personal calendar | `grcadden@gmail.com` — confirmed reachable. Also natively shared **into** the work calendar, which is how the primary gets it. |
 | Work calendar (Balcom) | **PRIMARY account — critical path.** Direct OAuth, untested. Sharing work→personal is confirmed blocked; see below. |
 | Server port | `4780` (1280 wide, 480 tall), override `PERIPHERAL_PORT` |
@@ -233,6 +235,23 @@ interchangeably. Nothing else in the build depends on which one we get.
   Keep `node_modules`, Playwright browsers, and caches out of sync scope or
   expect intermittent EPERM/EBUSY. Playwright's browser download is redirected
   via `PLAYWRIGHT_BROWSERS_PATH` — see `.env.example`.
+  **Superseded 2026-08-17 (same day): the repo moved out of OneDrive entirely**
+  — see below. The redirect is kept anyway, because it costs nothing and the
+  browser cache has no business inside a project directory.
+- **2026-08-17 — Redirecting each offender out of a synced folder is losing
+  strategy; move the project instead.** Peripheral lived in
+  `OneDrive\Agent_Workspace\` and accumulated a workaround per artifact: tokens
+  to `%LOCALAPPDATA%`, Playwright to `C:\dev`, and a `frames/` directory that at
+  1 fps would have written **86,400 files a day** into sync scope. Each fix was
+  correct and the list was still growing. Moving the working copy to
+  `C:\dev\peripheral` retired the whole class at once.
+  **The tell:** if a project needs a second redirect to keep a synced folder
+  happy, the folder is the problem, not the artifact.
+- **2026-08-17 — A cloud-synced folder is not a backup, and this repo had no
+  remote at all.** OneDrive was the only copy of the entire project — file
+  history is not version control, and a sync client will happily replicate a
+  deletion. Fixed by pushing to a private GitHub repo. **Standing rule: a
+  project gets a remote on day one, before it gets features.**
 - **2026-08-17 — Don't trust `python` on PATH on Windows; the launcher is `py`.**
   `python.exe` resolves to the Microsoft Store stub alias, which prints an
   install message and exits 49 — it does not fail like a missing command.

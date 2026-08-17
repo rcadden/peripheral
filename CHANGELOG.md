@@ -173,6 +173,28 @@ pushes a frame to real glass.
     must not be able to stall the push.
   - `IDLE_TIMEOUT_MS` and `KEEPALIVE_INTERVAL_MS` exported from `hid.js` with the
     measurement recorded beside them.
+- **Moved out of OneDrive to `C:\dev\peripheral`, and given a git remote**
+  (2026-08-17).
+  - **The repo had no remote at all.** OneDrive was the only copy of the entire
+    project. File history is not version control, and a sync client replicates
+    deletions faithfully. Now pushed to a **private**
+    `github.com/rcadden/peripheral` (`dev` and `main`), to go public in Sprint 3.
+  - The project had accumulated one workaround per artifact to survive a synced
+    folder: tokens redirected to `%LOCALAPPDATA%`, Playwright to `C:\dev`, and a
+    `frames/` directory that at 1 fps would have written **86,400 files a day**
+    into sync scope. Every fix was correct and the list kept growing. Moving the
+    working copy retired the class instead of the instances.
+  - `.env` — which will hold `GOOGLE_CLIENT_SECRET` — is outside sync scope as a
+    side effect.
+  - Verified after the move and before anything was removed: both branches
+    present, history identical, dependencies reinstalled, and a frame pushed to
+    the real panel from the new location (`PM=128 SUB=1`, accepted in 22ms).
+  - Packaging into a single app was considered and **deferred to Sprint 3**,
+    where it already belongs as a distribution concern. It solves none of the
+    above: Playwright's Chromium cannot meaningfully be bundled, `node-hid` needs
+    unpacking to load, tokens still need a writable data dir, and a build step
+    works against the project's "runs on a bare clone" property. Running at
+    startup is a Task Scheduler entry and needs no packaging at all.
 
 ### Known unknowns
 - **Whether Balcom permits third-party OAuth app access.** The entire calendar
