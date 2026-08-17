@@ -13,6 +13,11 @@ whether he has a meeting soon.**
 Sprint 1 — Foundation. Agenda pane renders at true size on mock data; palette
 extraction working. Hardware arrives **2026-08-18**; transport unwritten.
 
+> **Starting a session? Read
+> [`docs/plans/session-handoff-2026-08-17.md`](docs/plans/session-handoff-2026-08-17.md)
+> first.** It has the ordered next actions, the hardware-arrival checklist, what
+> is already verified, and the open questions that need Ricky.
+
 ## Hardware — read this before touching the transport
 **Thermalright Trofeo Vision LCD 6.86" Black Edition** ($37.90, Amazon
 `B0GYKJZT2F`, purchased 2026-08-16).
