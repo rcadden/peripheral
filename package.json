@@ -18,7 +18,7 @@
   },
   "optionalDependencies": {
     "node-hid": "^3.4.0",
-    "playwright": "^1.49.0",
+    "playwright": "^1.62.1",
     "sharp": "^0.33.5"
   }
 }

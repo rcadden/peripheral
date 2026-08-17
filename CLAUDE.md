@@ -17,7 +17,7 @@ run when it lands. Work-calendar access remains the critical path and is not
 blocked on hardware; it can move today.
 
 > **Starting a session? Read
-> [`docs/plans/session-handoff-2026-08-17.md`](docs/plans/session-handoff-2026-08-17.md)
+> [`docs/plans/session-handoff-2026-08-17b.md`](docs/plans/session-handoff-2026-08-17b.md)
 > first.** It has the ordered next actions, the hardware-arrival checklist, what
 > is already verified, and the open questions that need Ricky.
 

@@ -45,8 +45,9 @@ Sprints are thematic, not time-boxed. `- [x]` marks done; nothing is deleted.
       geometry and channel order
 - [x] Measure the panel's idle behaviour (`npm run idle-test`) — reverts to its
       boot logo ~3s after the last frame; the USB handle is irrelevant
-- [ ] **Playwright renderer: screenshot localhost → JPEG → transport**
-- [ ] **Daemon: push loop and render loop SEPARATE** — push unconditionally at
+- [x] **Playwright renderer: screenshot localhost → JPEG → transport** — 33-37ms
+      per capture, one long-lived browser, capture races a 2s timeout
+- [x] **Daemon: push loop and render loop SEPARATE** — push unconditionally at
       1 fps shipping the latest available frame; render updates it when it can.
       A hung screenshot must never stall the push (see the ~3s idle timeout)
 - [ ] Daemon: wire sources → state → render → push, with last-good-state cache

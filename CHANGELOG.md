@@ -173,6 +173,38 @@ pushes a frame to real glass.
     must not be able to stall the push.
   - `IDLE_TIMEOUT_MS` and `KEEPALIVE_INTERVAL_MS` exported from `hid.js` with the
     measurement recorded beside them.
+- **The loop is closed — the live agenda pane renders on the panel** (2026-08-17).
+  `npm start` now runs server → renderer → transport end to end. Measured over a
+  30s run: **29 pushes, 0 failures, frame age 1s**, panel and renderer both
+  healthy throughout.
+  - `src/render.js` implemented — one long-lived Chromium and page, viewport
+    1280×480 at `deviceScaleFactor: 1`, JPEG quality 92 (~63KB/frame).
+    **33–37ms per capture** after a ~5.5s cold start.
+  - `capture()` returns `null` instead of throwing, races a 2s timeout, and uses
+    an explicit clip so a CSS change that makes the document taller can never
+    silently ship a frame whose header lies about its geometry.
+  - `waitUntil: 'load'`, not `networkidle` — the pane runs a 1s countdown timer,
+    so the network never goes idle and `networkidle` would burn its full timeout
+    on every navigation. Waits on `document.fonts.ready` instead, because a
+    screenshot mid-font-swap ships the fallback face at this type size.
+  - Pane-side `pageerror` and console errors are surfaced. A pane that throws
+    still screenshots fine — it just screenshots *wrong*.
+- **Daemon rebuilt around two independent loops** (2026-08-17). The push loop
+  ships the current frame at a fixed 1 fps and **never awaits a render**; the
+  render loop replaces that frame whenever it can.
+  - This directly contradicts the design the file's own TODO carried — a single
+    interval that captured and *then* pushed. That couples the panel staying lit
+    to the renderer being fast, so a Chromium hiccup, font reflow or GC pause
+    lands the frame after the ~3s timeout and the panel shows its vendor logo.
+    The symptom would be intermittent flicker, which is miserable to diagnose
+    after the fact.
+  - A stale frame is a countdown a few seconds behind. A missed push is the
+    vendor logo. Those are not close in cost.
+  - Panel reconnects are fired off, not awaited — a physically absent panel can
+    take seconds to fail to open, and blocking the push loop on that guarantees
+    the logo on the way back. Re-entrancy guards stop a slow tick stacking.
+  - Renderer rebuilds itself after 5 consecutive capture failures.
+  - Shutdown closes Chromium explicitly; an orphaned browser outlives its parent.
 - **Moved out of OneDrive to `C:\dev\peripheral`, and given a git remote**
   (2026-08-17).
   - **The repo had no remote at all.** OneDrive was the only copy of the entire
