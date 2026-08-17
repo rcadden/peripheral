@@ -55,7 +55,25 @@ Rules that follow from it:
 | Status channel | Interface 0, ep `0x83` IN INTERRUPT, 8-byte packets |
 | HID usage | usagePage `0xff06`, usage `0x0001` (vendor-defined) |
 | Strings | manufacturer and product both `USBDISPLAY` |
+| Handshake | replies `PM=128 SUB=1` + serial — confirms a 1280×480 Trofeo Vision |
+| **Idle timeout** | **~3 s. Stop pushing and it reverts to its boot logo.** |
 | Mount | Magnetic back |
+
+### The panel forgets — push forever
+Measured 2026-08-17 with `npm run idle-test`: the firmware discards the pushed
+frame and falls back to its boot logo **~3 seconds** after the last frame it
+received. Holding the USB handle open does **not** preserve the image; only a
+new frame does.
+
+This is not a bug to work around, it is the operating model. **An idle daemon is
+a blank panel.** There is no "content unchanged, skip this frame" optimisation —
+that is a blank panel with extra steps.
+
+It also forces the daemon's shape: **the push loop and the render loop must be
+separate.** Push runs unconditionally at 1 fps and always ships the most recent
+frame available. Render updates that frame whenever it can. A Playwright
+screenshot that takes 800 ms is fine; one that hangs for 10 s must not be able to
+stall the push, or the panel goes to logo while the daemon is busy "working."
 
 **Arrived and connected 2026-08-17** — a day early. Enumerates cleanly; nothing
 has been written to it yet.
@@ -193,6 +211,19 @@ interchangeably. Nothing else in the build depends on which one we get.
 - Type scale is tuned for 6.86" read from ~3 feet, not for a desktop monitor.
 
 ## Lessons Learned
+- **2026-08-17 — The panel reverts to its logo ~3s after the last frame.** The
+  USB handle being open is irrelevant; only time-since-last-frame counts. This
+  turns "never render blank" into "never *stop* rendering" and forces the push
+  loop to be independent of the render loop. Measured with `npm run idle-test`,
+  which exists so the number can be re-derived rather than trusted.
+  **Standing rule:** any behaviour a device exhibits that we can't explain gets a
+  committed diagnostic script, not a note. The script survives a firmware
+  revision and a replacement unit; the note doesn't.
+- **2026-08-17 — "Accepted" and "displayed" are different claims.** The very
+  first frame push reported 81/81 chunks written with no errors while the panel
+  showed nothing, because a bad `readTimeout` call had silently skipped the
+  handshake. Transport success proves bytes moved, never that pixels changed.
+  Any transport tool must say so out loud and ask for eyes on the glass.
 - **2026-08-17 — Never use the wallpaper as a bitmap background.** The
   screenshot that inspired this project did, and the type was unreadable. The
   wallpaper's own dominant colours were measured at brightness 0.72–0.84. Hue

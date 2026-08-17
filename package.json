@@ -13,7 +13,8 @@
     "auth": "node --env-file-if-exists=.env src/auth/login.js",
     "palette": "node src/palette.js",
     "probe": "node src/transport/probe.js",
-    "send": "node --env-file-if-exists=.env src/transport/send.js"
+    "send": "node --env-file-if-exists=.env src/transport/send.js",
+    "idle-test": "node --env-file-if-exists=.env src/transport/idle-test.js"
   },
   "optionalDependencies": {
     "node-hid": "^3.4.0",

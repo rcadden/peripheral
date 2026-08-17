@@ -39,10 +39,16 @@ Sprints are thematic, not time-boxed. `- [x]` marks done; nothing is deleted.
       *(2026-08-17, a day early. Enumerates cleanly. Frame channel measured:
       interface 0, ep 0x82 OUT INTERRUPT, 512-byte packets. Interface 1 is a
       zero-endpoint WinUSB decoy. Nothing written to the device yet.)*
-- [ ] **Read the handshake + frame header off the protocol reference** — the last
-      unknowns before any byte is written. Do not guess; 19% one-star failure rate
-- [ ] **HID transport: JPEG frame push at 1 fps**
-- [ ] Playwright renderer: screenshot localhost → JPEG → transport
+- [x] Read the handshake + frame header off the protocol reference
+- [x] **HID transport: JPEG frame push — FIRST LIGHT 2026-08-17.** Handshake
+      returns PM=128 SUB=1; a 1280×480 JPEG renders on the glass with correct
+      geometry and channel order
+- [x] Measure the panel's idle behaviour (`npm run idle-test`) — reverts to its
+      boot logo ~3s after the last frame; the USB handle is irrelevant
+- [ ] **Playwright renderer: screenshot localhost → JPEG → transport**
+- [ ] **Daemon: push loop and render loop SEPARATE** — push unconditionally at
+      1 fps shipping the latest available frame; render updates it when it can.
+      A hung screenshot must never stall the push (see the ~3s idle timeout)
 - [ ] Daemon: wire sources → state → render → push, with last-good-state cache
 - [ ] Run on login (Task Scheduler), survive panel disconnect without dying
 

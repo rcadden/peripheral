@@ -74,6 +74,36 @@ const CHUNK = 512;              // == OUT endpoint maxPacketSize, measured
 const CMD_PICTURE = 0x02;
 const FRAME_SETTLE_MS = 1;      // _DELAY_FRAME_TYPE2_S in the reference
 
+/**
+ * MEASURED ON HARDWARE 2026-08-17 — the panel's inactivity timeout.
+ *
+ * The firmware discards the pushed frame and falls back to its built-in boot
+ * logo roughly 3 seconds after the last frame it received. Confirmed three ways
+ * in one run of `npm run idle-test`:
+ *
+ *   - one frame then silence, handle held OPEN -> reverted at ~3s
+ *   - 1 fps for 15s                            -> stayed up the whole time
+ *   - after the last frame, handle released    -> reverted ~2s later
+ *
+ * The handle is irrelevant; only time-since-last-frame matters. If closing the
+ * handle were the trigger, the third case would have reverted instantly.
+ *
+ * Consequence: the daemon must push UNCONDITIONALLY and forever. There is no
+ * "content unchanged, skip this frame" optimisation available — that is just a
+ * blank panel with extra steps. See project_goals.md principle 3.
+ *
+ * Timings are stopwatch-measured and carry a second or two of human error, so
+ * treat 3000ms as approximate and keep real margin under it.
+ */
+export const IDLE_TIMEOUT_MS = 3000;
+
+/**
+ * The slowest safe push cadence. 1 fps sits ~3x inside the measured timeout,
+ * which absorbs a late frame without the panel dropping. Do not raise this
+ * above ~1500ms without re-running `npm run idle-test` on the actual unit.
+ */
+export const KEEPALIVE_INTERVAL_MS = 1000;
+
 /** Round up to the next multiple of CHUNK. Frames are 512-aligned. */
 const alignUp = (n) => Math.ceil(n / CHUNK) * CHUNK;
 

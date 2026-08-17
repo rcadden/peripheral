@@ -144,6 +144,36 @@ pushes a frame to real glass.
     rather than into the repo, per the sync-lock lesson. The repo is still a bare
     clone with no `node_modules`.
 
+- **FIRST LIGHT, 2026-08-17.** A rendered 1280×480 JPEG is on the glass. The
+  full chain works: build frame → HID → panel.
+  - Type 2 wire protocol implemented in `src/transport/hid.js` from the protocol
+    reference rather than guessed. Handshake returns `PM=128 SUB=1` with a valid
+    serial — the reference's documented signature for a 1280×480 Trofeo Vision,
+    so the panel identified itself rather than being assumed.
+  - Verified on the glass by eye: full 1280 width arrives, RGB channel order is
+    correct, geometry is right.
+  - `npm run send -- <file.jpg>` added as the standing transport debug tool, and
+    `docs/first-light.jpg` as a test frame with inward-pointing corner brackets,
+    edge labels and RGB swatches, so orientation and channel order are checkable
+    at a glance.
+- **The panel's idle timeout is ~3 seconds** — measured, not assumed, with the
+  new `npm run idle-test`. The firmware discards the pushed frame and reverts to
+  its boot logo about 3s after the last frame received. **Holding the USB handle
+  open does not preserve the image; only a new frame does.**
+  - Three phases separated the causes in one run: one frame then silence with the
+    handle open reverted at ~3s; 1 fps for 15s stayed rock steady; and after the
+    final frame the image survived ~2s past the handle close rather than dropping
+    instantly. That last phase is what rules out handle-close as the trigger.
+  - `project_goals.md` principle 3 amended from "never render blank" to **"never
+    render blank — and never *stop* rendering."** An idle daemon is a blank
+    panel; there is no "content unchanged, skip this frame" optimisation.
+  - Forces the daemon's architecture: **push loop and render loop must be
+    separate.** Push runs unconditionally at 1 fps shipping the most recent frame
+    available; render updates that frame whenever it can. A screenshot that hangs
+    must not be able to stall the push.
+  - `IDLE_TIMEOUT_MS` and `KEEPALIVE_INTERVAL_MS` exported from `hid.js` with the
+    measurement recorded beside them.
+
 ### Known unknowns
 - **Whether Balcom permits third-party OAuth app access.** The entire calendar
   plan rests on this one untested assumption. If it is blocked, the only

@@ -26,9 +26,21 @@ done properly beats four half-built.
    about three feet.
 2. **Read-only, everywhere.** Peripheral never writes to a calendar, never
    sends anything, never acknowledges an invite. It is a window, not a door.
-3. **Never render blank.** A dead network, an expired token, or a crashed source
-   must degrade to last-known-good data with a visible stale marker. A blank
-   ambient display is worse than a wrong one, because you stop trusting it.
+3. **Never render blank — and never *stop* rendering.** A dead network, an
+   expired token, or a crashed source must degrade to last-known-good data with
+   a visible stale marker. A blank ambient display is worse than a wrong one,
+   because you stop trusting it.
+
+   *Amended 2026-08-17, measured on hardware:* the panel reverts to its built-in
+   boot logo roughly **3 seconds** after the last frame it received. Holding the
+   USB handle open does not preserve the image — only a new frame does. So the
+   second half of this principle is not a metaphor. **An idle daemon is a blank
+   panel.** There is no quiet period, no "nothing changed so skip this frame,"
+   and no render slow enough to be worth waiting for. The push loop runs
+   unconditionally at a fixed cadence and always ships the most recent frame it
+   has, even if that frame is minutes old and stale-marked. Anything that can
+   block the push loop — a slow screenshot, a hung source, a retry — must be
+   moved off it.
 4. **Local by default.** No cloud component. The panel is USB-powered by this
    PC; if the PC is asleep the screen is dark anyway, so there is nothing for a
    server to do. A calendar token should not exist anywhere it doesn't need to.
