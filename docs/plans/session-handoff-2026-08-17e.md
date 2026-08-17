@@ -19,6 +19,17 @@ the changelog wins.
 >
 > The type scale remains **provisionally** accepted — the second pass does not
 > change that, and open question 2 still stands.
+>
+> **Second amendment, 2026-08-17.** Verdict on the second type pass, on the
+> glass: **"much better"**. Still provisional; the roadmap revisit stands.
+> Ricky closed the tweak loop for the day at this point.
+>
+> *Why this file was amended twice rather than superseded by an `f`: both
+> amendments belong to the same working session, and a near-identical `f` would
+> force a cold reader to diff two files to find two paragraphs. The
+> never-edit rule protects handoffs that have already been superseded — this one
+> is still current, and the project's wider convention is that corrections are
+> appended with a date. The next session gets a fresh file.*
 
 ## State of the world
 

@@ -87,7 +87,11 @@ Sprints are thematic, not time-boxed. `- [x]` marks done; nothing is deleted.
       **Accepted PROVISIONALLY, not finally** — Ricky, on the glass: "the blue
       is OK for now, and the font size is improved… subject to change after
       using it for a few days." Do not treat either as settled; a revisit is
-      expected and is not a regression.)*
+      expected and is not a regression.
+      **Second type pass same day**, after living with the first: the bar mark
+      and clock doubled (30px / 34px), the eyebrows doubled to 30px and went
+      bold, and the agenda list took another +2px to 24px. Verdict on the
+      glass: "much better" — still provisional.)*
 
 **Sprint 1 is complete.** The panel shows Ricky's real day.
 

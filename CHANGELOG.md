@@ -536,6 +536,9 @@ pushes a frame to real glass.
     left alone. Recorded because the next size increase is the one that breaks
     it, and this is the number to check against.
   - Six agenda rows still fit 480px with nothing clipped.
+  - **Verdict on the glass: "much better"** (Ricky, 2026-08-17). Still
+    provisional — the second pass does not settle the type scale, and the
+    roadmap revisit after a few days of use stands.
 - **`focusTime` reached the hero slot in normal use**, 2026-08-17 15:27 — the
   panel showed a countdown to Ricky's own focus block. This is the open
   question from the design pass appearing in the wild rather than in theory,

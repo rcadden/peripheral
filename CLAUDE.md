@@ -303,6 +303,20 @@ interchangeably. Nothing else in the build depends on which one we get.
 - Type scale is tuned for 6.86" read from ~3 feet, not for a desktop monitor.
 
 ## Lessons Learned
+- **2026-08-17 — A comment that promises a layout constraint is a claim with an
+  expiry date.** `.event`'s time column carried "must hold the widest form —
+  `12:30 AM`" beside a hard-coded `104px`. That number was tuned when the row
+  was 20px type; by the time the row reached 24px nobody had re-checked it, and
+  the comment still read as reassurance. It happened to still fit — measured in
+  the page at **76.9px**, not estimated — but that was luck, not verification.
+  **Standing rule: when a comment asserts that a fixed value satisfies a
+  constraint, re-measure it in the page rather than trusting the sentence, and
+  write the measured number into the changelog** so the next person changing
+  the size has a figure to check against instead of prose.
+  Related: `.bar` carried a fixed `height: 22px` that silently clipped the
+  instant the bar type doubled. **A fixed dimension on a container whose
+  contents can be resized is a latent clip** — prefer content-driven height and
+  let a `flex: 1 1 auto` sibling absorb the change.
 - **2026-08-17 — A local bug can masquerade as a remote policy decision.**
   `openBrowser()` ran `cmd /c start "" <url>` unquoted, and **cmd treats `&` as
   a command separator**, so the browser received only `...?client_id=XXX`.
