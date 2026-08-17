@@ -67,10 +67,16 @@ function fmtCountdown(ms) {
 
 /* ── mock data (browser-only fallback) ──────────────────────────────────── */
 
+/* Display labels and tints, keyed by PeripheralEvent.calendar — which is the
+ * label from the calendarId -> label map, not the account. Keys here must
+ * match guessLabel() in src/sources/gcal.js, which is what the daemon uses
+ * when no map is configured. An unknown key still renders, dimmed. */
 const CALENDARS = {
   work: { label: 'Balcom', tint: 'var(--accent-cool)' },
   personal: { label: 'Personal', tint: 'var(--accent-hero)' },
-  athletics: { label: 'Athletics - VB JV Women', tint: 'var(--text-dim)' },
+  athletics: { label: 'Athletics', tint: 'var(--text-dim)' },
+  holidays: { label: 'Holidays', tint: 'var(--text-faint)' },
+  other: { label: 'Other', tint: 'var(--text-dim)' },
 };
 
 function mockState() {
@@ -80,10 +86,18 @@ function mockState() {
     s.setSeconds(0, 0);
     return { start: s.toISOString(), end: new Date(s.getTime() + durMins * 60_000).toISOString() };
   };
+  // Local midnight to local midnight, matching what the normaliser emits for
+  // an all-day event. Present in the mock deliberately: the hero-hijack bug
+  // this guards against was invisible until real data carried one.
+  const midnight = new Date(now); midnight.setHours(0, 0, 0, 0);
+  const tomorrow = new Date(midnight); tomorrow.setDate(tomorrow.getDate() + 1);
+
   return {
     generatedAt: now.toISOString(),
     stale: false,
     events: [
+      { id: 'm0', title: 'Ashley OOO', calendar: 'holidays', allDay: true,
+        start: midnight.toISOString(), end: tomorrow.toISOString() },
       // Offsets are kept tight around "now" so the mock stays plausible
       // whatever time of day you open the page.
       { id: 'm1', title: 'Media team standup', calendar: 'work',
@@ -137,14 +151,28 @@ function render() {
   if (!state?.events?.length) return renderEmpty(now);
 
   const events = [...state.events].sort((a, b) => new Date(a.start) - new Date(b.start));
-  const marked = events.map((ev) => ({ ...ev, phase: classify(ev, now) }));
+
+  /* ALL-DAY EVENTS ARE NOT CANDIDATES FOR THE HERO.
+   *
+   * An all-day event spans local midnight to local midnight, so classify()
+   * calls it 'now' for the entire day — and since 'now' wins the focus slot,
+   * a single US Holidays entry would sit in the hero from midnight to midnight
+   * and hide every actual meeting. That is the North Star failing outright:
+   * you would still have to open Google Calendar to find out what's next.
+   *
+   * This did not show up on mock data, which has no all-day events. It became
+   * live the moment the real calendar list was discovered, because the account
+   * carries a holidays calendar. So: all-day events are context, listed but
+   * never focused, and never on the countdown or the progress bar. */
+  const allDay = events.filter((e) => e.allDay);
+  const timed = events.filter((e) => !e.allDay).map((ev) => ({ ...ev, phase: classify(ev, now) }));
 
   // "Up next" = happening now if anything is, else the soonest future event.
-  const focus = marked.find((e) => e.phase === 'now') || marked.find((e) => e.phase === 'future');
+  const focus = timed.find((e) => e.phase === 'now') || timed.find((e) => e.phase === 'future');
 
-  renderHero(focus, marked, now);
-  renderList(marked, focus, now);
-  renderProgress(focus, marked, now);
+  renderHero(focus, timed, allDay, now);
+  renderList(timed, allDay, focus, now);
+  renderProgress(focus, timed, now);
 }
 
 function renderEmpty(now) {
@@ -156,8 +184,18 @@ function renderEmpty(now) {
   el.progress.style.width = '0%';
 }
 
-function renderHero(focus, marked, now) {
+function renderHero(focus, marked, allDay, now) {
   if (!focus) {
+    // No timed events left, but an all-day entry is still worth naming — it is
+    // usually the reason the day is otherwise empty.
+    if (!marked.length && allDay.length) {
+      el.countdown.textContent = 'CLEAR';
+      el.countdown.className = 'countdown';
+      el.title.textContent = allDay[0].title;
+      el.meta.innerHTML = `<span>All day</span>`
+        + (allDay.length > 1 ? `<span class="sep">·</span><span>+${allDay.length - 1} more</span>` : '');
+      return;
+    }
     el.countdown.textContent = 'DONE';
     el.countdown.className = 'countdown';
     el.title.textContent = 'Nothing left today';
@@ -179,8 +217,12 @@ function renderHero(focus, marked, now) {
 
   const cal = CALENDARS[focus.calendar] || { label: focus.calendar, tint: 'var(--text-dim)' };
   const bits = [`${fmtTime(start)} – ${fmtTime(end)}`];
-  if (focus.conference === 'meet') bits.push('Meet');
-  if (focus.location) bits.push(focus.location);
+  // The normaliser now detects Zoom and Teams too, not just Meet.
+  const CONF = { meet: 'Meet', zoom: 'Zoom', teams: 'Teams' };
+  if (CONF[focus.conference]) bits.push(CONF[focus.conference]);
+  // A conference link pasted into the location field is already reported as
+  // the conference; repeating the raw URL would eat the whole meta line.
+  if (focus.location && !/^https?:\/\//i.test(focus.location)) bits.push(focus.location);
   if (focus.attendeeCount) bits.push(`${focus.attendeeCount} people`);
 
   el.meta.innerHTML =
@@ -189,20 +231,31 @@ function renderHero(focus, marked, now) {
     + bits.map(esc).join('<span class="sep">·</span>');
 }
 
-function renderList(marked, focus, now) {
-  // The panel fits six rows. Keep context: show a little of what's done, but
-  // bias hard toward what's ahead.
+function renderList(marked, allDay, focus, now) {
+  // The panel fits six rows. All-day entries are pinned at the top and take
+  // from that budget — they are context for the day, so at most two get to
+  // crowd out timed events, which are the thing you actually came for.
   const MAX = 6;
+  const pinned = allDay.slice(0, 2);
+
   let rows = marked;
-  if (rows.length > MAX) {
+  const budget = MAX - pinned.length;
+  if (rows.length > budget) {
+    // Keep a little of what's done for context, but bias hard toward ahead.
     const firstUpcoming = rows.findIndex((e) => e.phase !== 'past');
     const start = firstUpcoming < 0
-      ? rows.length - MAX
-      : Math.max(0, Math.min(firstUpcoming - 1, rows.length - MAX));
-    rows = rows.slice(start, start + MAX);
+      ? rows.length - budget
+      : Math.max(0, Math.min(firstUpcoming - 1, rows.length - budget));
+    rows = rows.slice(start, start + budget);
   }
 
-  el.events.innerHTML = rows.map((ev) => {
+  const allDayHtml = pinned.map((ev) => `<li class="event is-allday">`
+    + `<span class="tick"></span>`
+    + `<span class="when">ALL DAY</span>`
+    + `<span class="what">${esc(ev.title)}</span>`
+    + `</li>`).join('');
+
+  const timedHtml = rows.map((ev) => {
     const cls = ev.phase === 'past' ? 'is-past'
       : ev.phase === 'now' ? 'is-now'
       : focus && ev.id === focus.id ? 'is-next' : '';
@@ -212,6 +265,9 @@ function renderList(marked, focus, now) {
       + `<span class="what">${esc(ev.title)}</span>`
       + `</li>`;
   }).join('');
+
+  el.events.innerHTML = allDayHtml + timedHtml
+    || '<li class="empty">No events</li>';
 }
 
 /* Fill represents how far we are through the gap before the next event, so

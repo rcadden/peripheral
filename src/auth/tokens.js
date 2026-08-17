@@ -19,7 +19,7 @@
 
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
-import os from 'node:os';
+import { dataFile } from '../paths.js';
 
 const STORE_VERSION = 1;
 
@@ -28,13 +28,7 @@ export function defaultTokenPath() {
   if (process.env.PERIPHERAL_TOKEN_PATH) {
     return path.resolve(process.env.PERIPHERAL_TOKEN_PATH);
   }
-  if (process.platform === 'win32') {
-    const base = process.env.LOCALAPPDATA
-      ?? path.join(os.homedir(), 'AppData', 'Local');
-    return path.join(base, 'Peripheral', 'tokens.json');
-  }
-  const base = process.env.XDG_CONFIG_HOME ?? path.join(os.homedir(), '.config');
-  return path.join(base, 'peripheral', 'tokens.json');
+  return dataFile('tokens.json');
 }
 
 /**

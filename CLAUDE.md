@@ -10,16 +10,19 @@ Success in one sentence: **Ricky stops opening Google Calendar to find out
 whether he has a meeting soon.**
 
 ## Status
-Sprint 1 — Foundation. Agenda pane renders at true size on mock data; palette
-extraction working. **Hardware arrives tomorrow, 2026-08-18** — transport is
-still unwritten, and `npm run probe` against a live device is the first thing to
-run when it lands. Work-calendar access remains the critical path and is not
-blocked on hardware; it can move today.
+Sprint 1 — Foundation, essentially complete. Hardware arrived and works; the
+loop is closed; the daemon **starts itself at logon**; the calendar fetch path
+is written end to end and covered by fixture tests.
+
+**One thing blocks the whole calendar half: the Google OAuth client does not
+exist yet.** Nothing downstream of it is blocked — it is all written and
+waiting. `npm run auth` is the experiment, and it tests Workspace policy and
+the entire fetch path in one go.
 
 > **Starting a session? Read
-> [`docs/plans/session-handoff-2026-08-17b.md`](docs/plans/session-handoff-2026-08-17b.md)
-> first.** It has the ordered next actions, the hardware-arrival checklist, what
-> is already verified, and the open questions that need Ricky.
+> [`docs/plans/session-handoff-2026-08-17c.md`](docs/plans/session-handoff-2026-08-17c.md)
+> first.** It has the ordered next actions, what is verified and by what
+> method, and the open questions that need Ricky.
 
 ## Session-end ritual — changelog first, handoff derived
 **Write [`CHANGELOG.md`](CHANGELOG.md) before touching the handoff, then rewrite
@@ -131,12 +134,14 @@ the contract.
 
 | Value | Status |
 |---|---|
-| Google OAuth client ID / secret | **NOT YET CREATED.** Create as **Desktop app** in a *personal* Cloud project, not Balcom's. Flow is written — `npm run auth`. |
+| Google OAuth client ID / secret | **NOT YET CREATED.** Create as **Desktop app** in a *personal* Cloud project, not Balcom's. Flow is written — `npm run auth`. **`.env` now exists with these two lines blank**; fill them in there. |
 | Repo location | **`C:\dev\peripheral`** — deliberately NOT in OneDrive. See Lessons Learned. |
 | Remote | `github.com/rcadden/peripheral` — **private** until Sprint 3, then public. |
 | Token store | `%LOCALAPPDATA%\Peripheral\tokens.json` — **outside the repo on purpose.** A refresh token has no business in a project directory. Override with `PERIPHERAL_TOKEN_PATH`. |
 | Personal calendar | `grcadden@gmail.com` — confirmed reachable. Also natively shared **into** the work calendar, which is how the primary gets it. |
 | Work calendar (Balcom) | **PRIMARY account — critical path.** Direct OAuth, untested. Sharing work→personal is confirmed blocked; see below. |
+| State cache | `%LOCALAPPDATA%\Peripheral\last-state.json` — last-good agenda, restored at boot. Holds real event titles, so **outside the repo**; this repo goes public. Override with `PERIPHERAL_STATE_PATH`. |
+| Daemon log | `%LOCALAPPDATA%\Peripheral\daemon.log` — written by the logon task, rotated at 5MB. `npm run startup:logs` |
 | Server port | `4780` (1280 wide, 480 tall), override `PERIPHERAL_PORT` |
 | Wallpaper source | `%APPDATA%\Microsoft\Windows\Themes\TranscodedWallpaper` |
 
@@ -213,6 +218,43 @@ interchangeably. Nothing else in the build depends on which one we get.
 - Type scale is tuned for 6.86" read from ~3 feet, not for a desktop monitor.
 
 ## Lessons Learned
+- **2026-08-17 — A process can log `fatal`, keep running, and report success.**
+  `main().catch()` set `process.exitCode = 1`, but by then the HTTP server was
+  listening and the intervals were armed, so Node had work left and never
+  exited. The scheduled task reported result 0, `node.exe` was alive, nothing
+  was pushed, and the panel sat on its vendor logo. Every health signal said
+  fine. A fatal path must call `process.exit()`.
+  **Standing rule: a dead daemon must LOOK dead.** Anything that supervises it —
+  Task Scheduler, a status command, you at a glance — can only act on what it
+  can observe, so "degraded but alive" must never be indistinguishable from
+  "working".
+- **2026-08-17 — A scheduled task inherits no shell environment, and that is
+  where the first logon run died.** `PLAYWRIGHT_BROWSERS_PATH` had only ever
+  been exported by hand in a terminal, so Chromium was not where Playwright
+  looked. **Standing rule: anything the daemon needs lives in `.env`, never in
+  a terminal that happened to export it.** `.env.example` is the contract;
+  `.env` must actually exist on any machine that runs the daemon unattended.
+- **2026-08-17 — An unattended path is only verified by running it unattended.**
+  Both bugs above were invisible to code review and to `npm start` in a
+  terminal. They appeared on the first real logon-task run because the trigger
+  was an environment difference. This is the same rule as "accepted is not
+  displayed", one layer up.
+- **2026-08-17 — `node --test` with no arguments discovers `*-test.js`**, so it
+  swept in `src/transport/idle-test.js` and drove the real panel for 68
+  seconds. The test script uses a scoped glob.
+  **Standing rule: the test command must never be able to touch hardware.**
+- **2026-08-17 — Windows scripting has two traps worth remembering.**
+  PowerShell variables are case-insensitive, so a local `$action` collides with
+  a `[ValidateSet]` `$Action` parameter and fails on assignment. And
+  `powershell.exe` reads a BOM-less `.ps1` as ANSI, so a single em-dash in a
+  comment becomes a parse error several lines later. Keep `scripts/*.ps1`
+  ASCII-only.
+- **2026-08-17 — All-day events span local midnight to local midnight**, so any
+  "is this happening now" test returns true for the whole day. One US Holidays
+  entry would have owned the hero slot from midnight to midnight and hidden
+  every real meeting. All-day events are context, never focus.
+  **The wider point: mock data that omits a case cannot warn you about it.** The
+  mock now carries an all-day event for exactly this reason.
 - **2026-08-17 — The panel reverts to its logo ~3s after the last frame.** The
   USB handle being open is irrelevant; only time-since-last-frame counts. This
   turns "never render blank" into "never *stop* rendering" and forces the push

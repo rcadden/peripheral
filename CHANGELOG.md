@@ -228,11 +228,157 @@ pushes a frame to real glass.
     works against the project's "runs on a bare clone" property. Running at
     startup is a Task Scheduler entry and needs no packaging at all.
 
+- **The calendar half is written end to end** (2026-08-17). Everything from
+  `events.list` to the panel now exists. **None of it has spoken to Google**,
+  because the OAuth client still does not exist — see Known unknowns.
+  - `ApiProvider.fetchToday()` implemented in `src/sources/gcal.js`.
+    `singleEvents=true` + `orderBy=startTime` so a recurring standup expands to
+    today's instance rather than arriving as one master event with an RRULE.
+    Follows pagination. Cancelled events and declined invites are dropped.
+  - **The query window is local midnight to local midnight with an explicit
+    offset**, not a UTC day. A bare UTC window shifts the agenda by the offset
+    and silently loses the last hours of the evening.
+  - **All-day events parse via a local-date constructor, never
+    `new Date('2026-09-07')`** — that is UTC midnight, which is the previous
+    evening everywhere west of Greenwich. `end.date` is exclusive, per Google.
+  - A `freeBusyReader` calendar returns blocks with no summary at all. Those
+    render as **"Busy"**, never an empty string, which would read as a
+    rendering bug rather than as information.
+  - Conference detection widened from Meet to **Meet, Zoom and Teams**, read
+    from `conferenceData` first and falling back to URIs in the entry points,
+    location or description.
+  - `guessLabel()` extracted and **shared between `npm run auth` and the
+    daemon**, so the map printed for pasting is the same map used when nothing
+    is pasted. They previously would have disagreed.
+  - One calendar failing no longer loses the account, and one provider failing
+    no longer loses the rest.
+  - `collect()` now **throws on total failure instead of returning an empty
+    state.** `{ events: [] }` means "genuinely nothing scheduled" and makes the
+    panel say CLEAR — a specific, reassuring, and in that situation false
+    claim. If every source is down we do not know the day is clear, and the
+    caller must fall back to last-good rather than assert it.
+  - `buildProviders()` reads `PERIPHERAL_ACCOUNTS` and
+    `PERIPHERAL_CALENDARS_<ACCOUNT>` (`id=label` pairs; empty means discover
+    every visible calendar once per process). Missing credentials produce a
+    warning and no source — not an error. The daemon must still come up, serve
+    the pane and push frames, because that is what works today.
+- **`npm test` — 30 tests**, `node:test`, zero dependencies. 19 over the
+  calendar normaliser, 11 over the state cache.
+  - The normaliser fixtures cover the transform, **not the network**: they are
+    built from Google's documented resource shape rather than captured from a
+    live account, so **they do not prove the field names Google actually
+    sends.** Spot-check one real payload against them when the token exists.
+  - The cache tests exist because the cache only writes on a *successful*
+    fetch, so nothing today exercises it — it would have sat unverified until
+    the first real token, despite its entire job being to behave correctly on
+    the boot after something went wrong.
+  - The script uses a **scoped glob**, because bare `node --test` auto-discovers
+    anything matching `*-test.js` — which swept in `src/transport/idle-test.js`
+    and drove the real panel for 68 seconds. Tests must never touch hardware.
+- **Last-good state now survives a restart** (`src/cache.js`). The in-memory
+  last-good state protected against a failed refresh but evaporated on restart,
+  and restart is the common case now that the daemon launches at logon. Boot
+  with Wi-Fi still negotiating and the panel showed an empty agenda, which
+  reads as "you have a free day" rather than "I don't know yet".
+  - Restored **before** the first fetch, flagged `stale: true`, and the flag is
+    sticky until a fetch actually succeeds — age alone would clear the badge on
+    a two-minute-old cache and quietly assert that leftovers are live.
+  - Dropped entirely past 36h. Atomic write; a corrupt or unreadable cache is
+    logged and ignored rather than fatal.
+  - Lives in `%LOCALAPPDATA%\Peripheral\`, not the repo: it holds real event
+    titles from a work calendar, and **this repo goes public.** `src/paths.js`
+    now owns that directory for both the cache and the token store.
+- **Run at logon** — `npm run startup:install` / `:uninstall` / `:status` /
+  `:logs`, registering a per-user Task Scheduler entry. **No admin required**,
+  by design. Logs to `%LOCALAPPDATA%\Peripheral\daemon.log`, rotated at 5MB.
+  - The console window is suppressed with a `.vbs` launcher
+    (`WScript.Shell.Run` window style 0). `powershell -WindowStyle Hidden` still
+    flashes on every logon, and the no-window alternative — "run whether logged
+    on or not" — needs a stored password or the batch-logon right. The reasoning
+    is recorded in `scripts/hidden.vbs` so it isn't re-litigated.
+  - `ExecutionTimeLimit` set to **never**. The default is 3 days, after which
+    Windows would kill a daemon that was working perfectly and the panel would
+    revert to its logo with nothing in the log to explain it.
+  - `startup:status` reports **the process, not just the task** — a task can sit
+    at `Ready` with result 0 while nothing is running.
+  - Verified by actually running the task: 30 pushes, 0 failures, no window.
+
+### Fixed (this session)
+
+- **The daemon could become a zombie, and did on the very first logon-task
+  run** (2026-08-17). `main()` awaited `renderer.open()` bare, and the top-level
+  handler set `process.exitCode = 1`. By that point the HTTP server is listening
+  and intervals are armed, so **Node has work left and does not exit.** The
+  result: `[daemon] fatal` in the log, a live `node.exe`, the scheduled task
+  reporting **result 0**, nothing being pushed, and the panel on its vendor logo
+  indefinitely with nothing retrying. Every signal said healthy.
+  - Renderer open is now a **warning that retries every 30s**, matching how the
+    panel is already treated, and recovery is logged
+    (`renderer ready (recovered after 3 failed attempts)`).
+  - Genuine fatals now `process.exit(1)`, so a dead daemon **looks** dead and
+    the task's restart-on-failure can fire.
+  - Both paths verified deliberately: broken Chromium path → process stays up,
+    retries, heartbeat honestly reads `renderer=down`; path restored →
+    recovers unattended.
+  - **This was found by running the logon task, not by reading the code**, and
+    could not have been found any other way: the trigger was an environment
+    difference. Which is the standing rule already in `CLAUDE.md` — green
+    metrics are not evidence.
+- **The logon task had no `PLAYWRIGHT_BROWSERS_PATH`, so Chromium was not where
+  Playwright looked and the daemon died at startup.** A scheduled task does not
+  inherit a terminal's exported variables. There was no `.env` at all — the
+  variable had only ever been set by hand in a shell. `.env` now exists
+  (gitignored) with everything except the two Google values.
+  **Standing rule: anything the daemon needs belongs in `.env`, never in a
+  terminal that happened to export it.**
+- **All-day events would have hijacked the hero slot for the entire day.** An
+  all-day event spans local midnight to local midnight, so `classify()` calls it
+  `now`, and `now` wins the focus slot — one US Holidays entry would have sat in
+  the countdown from midnight to midnight and hidden every actual meeting. That
+  is the North Star failing outright.
+  - All-day events are now **context, never focus**: excluded from the hero,
+    the countdown and the progress bar; pinned above the timed rows, dimmed,
+    labelled `ALL DAY`, capped at two so they cannot crowd out the meetings.
+  - **Invisible on mock data, which had no all-day events** — it would have
+    become live the moment the real calendar list was discovered, since the
+    account carries a holidays calendar. An all-day entry is now in the mock so
+    the browser fallback exercises it.
+- A conference URL pasted into an event's `location` no longer prints the raw
+  URL in the meta line, where it ate the whole row.
+- `npm start` and `npm run serve` now load `.env`. Only `auth`, `send` and
+  `idle-test` did, so the daemon — the one thing that runs unattended — was the
+  only script without its configuration.
+- `npm run startup:logs` reads the log as UTF-8. Node writes UTF-8, Windows
+  PowerShell reads ANSI, and every em-dash arrived as mojibake.
+
 ### Known unknowns
 - **Whether Balcom permits third-party OAuth app access.** The entire calendar
   plan rests on this one untested assumption. If it is blocked, the only
   remaining route is ICS, which refreshes every 8–24h and reduces the countdown
   from a number to a rough indicator.
+- **Whether `ApiProvider.fetchToday()` works against real Google.** It is
+  written, and the transform is covered by fixtures, but **not one line of it
+  has made a network call.** The field names, the shape of a shared-in
+  calendar's events, and whether the personal calendar arrives with full details
+  or only free/busy are all still assumptions. The first `npm run auth` is the
+  experiment for all of them at once.
+- **Whether the push loop holds up when the PC is busy.** Undisturbed, the
+  daemon pushes **28–30 frames per 30s heartbeat with 0 failures** (100s run).
+  But during this session's own testing — several concurrent PowerShell and npm
+  processes — the same heartbeats read **19, 25 and 15 pushes**, with four
+  2-second screenshot timeouts and a `frameAge` of 3s. Fifteen pushes in thirty
+  seconds means up to 2s between frames, which is inside the panel's ~3s
+  forget window; that is visible flicker, and the machine this runs on will not
+  be idle. Not diagnosed further this session. **Suspect the render and push
+  timers competing on one event loop** — the two loops are logically
+  independent but share a thread, which is exactly the coupling the two-loop
+  design was meant to remove. Reproduce by loading the CPU and watching the
+  heartbeat deltas.
+- **Whether the live panel still looks right.** The daemon was verified this
+  session by metrics again — 30 pushes, 0 failures, under the logon task — and
+  the pane was verified through the real renderer as a JPEG. **Neither is eyes
+  on the glass**, and the all-day row is new visual output that has never been
+  seen at 6.86 inches from three feet.
 - Real `calendarId` values. A shared-in calendar's id is usually the sharer's
   address, but imported and secondary calendars use opaque ids. Enumerate with
   `calendarList.list` once a token exists; do not hardcode.

@@ -1,8 +1,11 @@
 /* gcal.js — Google Calendar source.
  *
- * ── NOT IMPLEMENTED ──────────────────────────────────────────────────────
- * Blocked on the work-calendar access question, which is the project's
- * critical path. See CLAUDE.md § "Work calendar — the open question".
+ * ── STATUS ───────────────────────────────────────────────────────────────
+ * ApiProvider.fetchToday() is IMPLEMENTED (2026-08-17). It has never run
+ * against a live Google account, because the OAuth client does not exist yet —
+ * the normalisation half is covered by recorded-payload fixtures in
+ * `test/gcal.test.js` (`npm test`), the network half is not covered by
+ * anything. First real run is the verification. See CLAUDE.md § work calendar.
  *
  * Confirmed 2026-08-17: the personal Google account exposes Personal, US
  * Holidays, and two imported athletics feeds. It does NOT expose the Balcom
@@ -59,6 +62,139 @@
  * @property {PeripheralEvent[]} events   today only, sorted by start
  */
 
+import { OAuthClient } from '../auth/oauth.js';
+
+const CALENDAR_API = 'https://www.googleapis.com/calendar/v3';
+
+/* ── time ────────────────────────────────────────────────────────────────
+ * Everything downstream is local-clock reasoning: "today" is the day this PC
+ * thinks it is, and the countdown is against this PC's wall clock. So the
+ * query window is local midnight to local midnight, expressed with an explicit
+ * offset. Sending a bare UTC window would shift the agenda by the offset and
+ * silently drop the last few hours of the evening.
+ */
+
+/** ISO 8601 with this machine's UTC offset, e.g. 2026-08-17T00:00:00-04:00. */
+export function toLocalIso(d) {
+  const p = (n, w = 2) => String(Math.abs(n)).padStart(w, '0');
+  const off = -d.getTimezoneOffset();
+  const sign = off >= 0 ? '+' : '-';
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
+    + `T${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`
+    + `${sign}${p(Math.floor(Math.abs(off) / 60))}:${p(Math.abs(off) % 60)}`;
+}
+
+/** Local midnight today → local midnight tomorrow, as ISO strings. */
+export function dayWindow(now = new Date()) {
+  const min = new Date(now); min.setHours(0, 0, 0, 0);
+  const max = new Date(min); max.setDate(max.getDate() + 1);
+  return { timeMin: toLocalIso(min), timeMax: toLocalIso(max) };
+}
+
+/* ── normalisation ───────────────────────────────────────────────────────
+ * Google's event resource is large, inconsistent between calendar types, and
+ * changes shape depending on how much the account is allowed to see. This is
+ * the only place that knows about any of that.
+ */
+
+/**
+ * Has the signed-in user declined this? A declined invite must not occupy the
+ * hero slot — an event you said no to is not "up next". Treated as absent
+ * rather than rendered dim, because the panel is read at a glance and a dim
+ * row still reads as a commitment.
+ */
+export function isDeclined(raw) {
+  const self = raw.attendees?.find((a) => a.self);
+  if (self) return self.responseStatus === 'declined';
+  // No attendee list: a solo event on your own calendar. Can't be declined.
+  return false;
+}
+
+/** meet | zoom | teams, or undefined. Checks the structured field first. */
+export function detectConference(raw) {
+  const type = raw.conferenceData?.conferenceSolution?.key?.type;
+  if (type === 'hangoutsMeet' || type === 'eventHangout') return 'meet';
+  if (raw.hangoutLink) return 'meet';
+
+  // addOn conferences (Zoom, Teams) only identify themselves in the URI.
+  const haystack = [
+    ...(raw.conferenceData?.entryPoints ?? []).map((e) => e.uri ?? ''),
+    raw.location ?? '',
+    raw.description ?? '',
+  ].join(' ').toLowerCase();
+
+  if (/zoom\.us|zoomgov\.com/.test(haystack)) return 'zoom';
+  if (/teams\.microsoft\.com|teams\.live\.com/.test(haystack)) return 'teams';
+  if (/meet\.google\.com/.test(haystack)) return 'meet';
+  return undefined;
+}
+
+/**
+ * One Google event resource → one PeripheralEvent, or null if it should not
+ * appear at all.
+ *
+ * @param {any} raw       a `events.list` item
+ * @param {string} label  display label from the calendarId -> label map
+ * @returns {import('./gcal.js').PeripheralEvent|null}
+ */
+export function normaliseEvent(raw, label) {
+  if (raw.status === 'cancelled') return null;
+  if (isDeclined(raw)) return null;
+
+  const allDay = Boolean(raw.start?.date);
+  if (!allDay && !raw.start?.dateTime) return null; // malformed; skip quietly
+
+  let start, end;
+  if (allDay) {
+    // `date` is a bare YYYY-MM-DD and `end.date` is EXCLUSIVE. Parsing it with
+    // `new Date('2026-08-17')` would give UTC midnight, which is the previous
+    // evening in every western timezone — the classic off-by-one-day bug.
+    start = toLocalIso(fromDateOnly(raw.start.date));
+    end = toLocalIso(fromDateOnly(raw.end?.date ?? raw.start.date));
+  } else {
+    start = raw.start.dateTime;
+    end = raw.end?.dateTime ?? raw.start.dateTime;
+  }
+
+  return {
+    id: raw.id,
+    // A freeBusyReader calendar returns events with no summary at all. Showing
+    // an empty title would read as a rendering bug; "Busy" is the truth.
+    title: raw.summary?.trim() || 'Busy',
+    start,
+    end,
+    allDay,
+    calendar: label,
+    location: raw.location || undefined,
+    attendeeCount: raw.attendees?.length || undefined,
+    conference: detectConference(raw),
+    status: raw.status === 'tentative' ? 'tentative' : 'confirmed',
+  };
+}
+
+/** 'YYYY-MM-DD' → local midnight on that date. */
+function fromDateOnly(s) {
+  const [y, m, d] = s.split('-').map(Number);
+  return new Date(y, m - 1, d);
+}
+
+/**
+ * Best-effort display label for a calendar we were not given a mapping for.
+ * Shared by `npm run auth` (which prints a paste-ready map) and the daemon
+ * (which falls back to this when no map is configured) so the two never
+ * disagree about what a calendar is called.
+ *
+ * @param {{id:string, primary?:boolean}} cal
+ * @param {string} account
+ */
+export function guessLabel(cal, account) {
+  if (cal.primary) return account;
+  if (/holiday/i.test(cal.id)) return 'holidays';
+  if (/@gmail\.com$/i.test(cal.id)) return 'personal';
+  if (/@import\.calendar\.google\.com$/i.test(cal.id)) return 'athletics';
+  return 'other';
+}
+
 /** @abstract */
 export class CalendarProvider {
   /** @returns {Promise<PeripheralEvent[]>} today's events for this provider */
@@ -88,27 +224,103 @@ export class CalendarProvider {
  * secondary calendars use opaque ids. Do not hardcode until verified.
  */
 export class ApiProvider extends CalendarProvider {
-  constructor({ account, calendars = {} }) {
+  /**
+   * @param {object} opts
+   * @param {string} opts.account
+   * @param {Record<string,string>=} opts.calendars  calendarId -> display label.
+   *   Empty means "discover them", see `resolveCalendars()`.
+   * @param {OAuthClient=} opts.client
+   */
+  constructor({ account, calendars = {}, client }) {
     super();
     this.account = account;
     /** @type {Record<string,string>} calendarId -> display label */
     this.calendars = calendars;
+    this.client = client ?? new OAuthClient({ account });
+    /** Discovered map, cached for the process. See resolveCalendars(). */
+    this._resolved = Object.keys(calendars).length ? calendars : null;
   }
   get label() { return `gcal:${this.account}`; }
   /** Display label for a calendarId. Unmapped ids fall back to the account. */
   labelFor(calendarId) {
-    return this.calendars[calendarId] ?? this.account;
+    return this._resolved?.[calendarId] ?? this.calendars[calendarId] ?? this.account;
   }
-  async fetchToday() {
-    // TODO: events.list per calendarId in this.calendars, timeMin = local
-    // midnight, timeMax = +1d, singleEvents=true & orderBy=startTime so
-    // recurrences expand properly. Drop status==='cancelled'. Treat a declined
-    // invite as absent. Set event.calendar = this.labelFor(calendarId).
-    //
-    // A shared-in calendar can return events WITHOUT details if the share is
-    // free/busy only. Personal->work is confirmed full-details, but if a future
-    // calendar comes back with no title, surface it as busy rather than blank.
-    throw new Error('ApiProvider.fetchToday() not implemented — OAuth client not yet created');
+
+  /**
+   * The calendarId -> label map to actually query.
+   *
+   * If none was configured we enumerate the account once and keep the result
+   * for the life of the process. Enumerating on every refresh would double the
+   * API calls for a list that changes about twice a year; a restart is a
+   * perfectly good cache invalidation for that.
+   */
+  async resolveCalendars() {
+    if (this._resolved) return this._resolved;
+    const cals = await this.client.listCalendars();
+    this._resolved = Object.fromEntries(
+      cals.map((c) => [c.id, guessLabel(c, this.account)]),
+    );
+    console.log(`[gcal] ${this.label}: discovered ${cals.length} calendar(s) — `
+      + Object.entries(this._resolved).map(([id, l]) => `${l}<-${id}`).join(', '));
+    return this._resolved;
+  }
+
+  /**
+   * Every event in one calendar's day window, following pagination.
+   *
+   * `singleEvents=true` is what expands a recurring series into the individual
+   * instance that falls today — without it a weekly standup comes back as one
+   * master event with an RRULE and the panel shows the wrong date forever.
+   */
+  async fetchCalendar(calendarId, window) {
+    const items = [];
+    let pageToken;
+    do {
+      const url = new URL(`${CALENDAR_API}/calendars/${encodeURIComponent(calendarId)}/events`);
+      url.searchParams.set('timeMin', window.timeMin);
+      url.searchParams.set('timeMax', window.timeMax);
+      url.searchParams.set('singleEvents', 'true');
+      url.searchParams.set('orderBy', 'startTime');
+      url.searchParams.set('showDeleted', 'false');
+      url.searchParams.set('maxResults', '250');
+      if (pageToken) url.searchParams.set('pageToken', pageToken);
+      const page = await this.client.apiGet(url.toString());
+      items.push(...(page.items ?? []));
+      pageToken = page.nextPageToken;
+    } while (pageToken);
+    return items;
+  }
+
+  async fetchToday(now = new Date()) {
+    const map = await this.resolveCalendars();
+    const ids = Object.keys(map);
+    if (!ids.length) throw new Error(`${this.label}: no calendars to query`);
+
+    const window = dayWindow(now);
+
+    /* One failing calendar must not lose the others. A deleted or unshared
+     * calendar 404s forever, and letting that take down the whole account
+     * would turn a stale entry in the map into a permanently blank panel. */
+    const results = await Promise.allSettled(
+      ids.map(async (id) => (await this.fetchCalendar(id, window))
+        .map((raw) => normaliseEvent(raw, map[id]))
+        .filter(Boolean)),
+    );
+
+    const events = [];
+    const failures = [];
+    results.forEach((r, i) => {
+      if (r.status === 'fulfilled') events.push(...r.value);
+      else failures.push(`${ids[i]}: ${r.reason?.message ?? r.reason}`);
+    });
+
+    if (failures.length === ids.length) {
+      throw new Error(`${this.label}: every calendar failed — ${failures[0]}`);
+    }
+    for (const f of failures) console.warn(`[gcal] ${this.label} calendar failed — ${f}`);
+
+    events.sort((a, b) => new Date(a.start) - new Date(b.start));
+    return events;
   }
 }
 
@@ -139,27 +351,41 @@ export class IcsProvider extends CalendarProvider {
  * mandatory rather than nice to have. `stale: true` with yesterday's events beats
  * an empty screen (project_goals.md, principle 3).
  *
+ * TOTAL failure THROWS rather than returning an empty state. This distinction
+ * is the whole point: `{ events: [] }` means "genuinely nothing scheduled" and
+ * the panel says CLEAR, which is a specific and reassuring claim. If every
+ * source is down we do not know that, and saying it is worse than saying
+ * nothing — the caller must fall back to last-good instead.
+ *
  * @param {CalendarProvider[]} providers
  * @returns {Promise<PeripheralState>}
+ * @throws if every provider failed, or if there are none
  */
 export async function collect(providers) {
+  if (!providers.length) throw new Error('no calendar providers configured');
+
   const results = await Promise.allSettled(providers.map((p) => p.fetchToday()));
 
   const events = [];
-  let anyFailed = false;
+  const failures = [];
   results.forEach((r, i) => {
     if (r.status === 'fulfilled') events.push(...r.value);
     else {
-      anyFailed = true;
-      console.error(`[gcal] ${providers[i].label} failed:`, r.reason?.message ?? r.reason);
+      const msg = r.reason?.message ?? String(r.reason);
+      failures.push(`${providers[i].label}: ${msg}`);
+      console.error(`[gcal] ${providers[i].label} failed:`, msg);
     }
   });
+
+  if (failures.length === providers.length) {
+    throw new Error(`all ${providers.length} calendar source(s) failed — ${failures[0]}`);
+  }
 
   events.sort((a, b) => new Date(a.start) - new Date(b.start));
 
   return {
     generatedAt: new Date().toISOString(),
-    stale: anyFailed,
+    stale: failures.length > 0,
     events,
   };
 }

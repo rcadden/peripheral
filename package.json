@@ -8,11 +8,17 @@
     "node": ">=22"
   },
   "scripts": {
-    "serve": "node src/server.js",
-    "start": "node src/daemon.js",
+    "serve": "node --env-file-if-exists=.env src/server.js",
+    "start": "node --env-file-if-exists=.env src/daemon.js",
+    "_comment_test": "Scoped glob on purpose. Bare `node --test` auto-discovers anything matching *-test.js, which sweeps in src/transport/idle-test.js and pushes frames to real hardware for 68s. Tests must never drive the panel.",
+    "test": "node --test \"test/**/*.test.js\"",
     "auth": "node --env-file-if-exists=.env src/auth/login.js",
     "palette": "node src/palette.js",
     "probe": "node src/transport/probe.js",
+    "startup:install": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/startup.ps1 -Action install",
+    "startup:uninstall": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/startup.ps1 -Action uninstall",
+    "startup:status": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/startup.ps1 -Action status",
+    "startup:logs": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/startup.ps1 -Action logs",
     "send": "node --env-file-if-exists=.env src/transport/send.js",
     "idle-test": "node --env-file-if-exists=.env src/transport/idle-test.js"
   },

@@ -198,6 +198,18 @@ body {
 .event.is-now .when { color: var(--accent-hero); }
 .event.is-now .tick { background: var(--accent-hero); }
 
+/* All-day — pinned above the timed rows and deliberately quiet. It is context
+   for the day, never a thing to act on, so it must not compete with the next
+   meeting for attention. "ALL DAY" is tracked out to read as a label rather
+   than as a mis-set clock time in the same column. */
+.event.is-allday { color: var(--text-faint); }
+.event.is-allday .when { color: var(--text-faint); font-size: 15px; letter-spacing: 0.08em; }
+.event.is-allday .tick {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--text-faint);
+  transform: rotate(45deg);
+}
+
 .empty { font-size: 20px; color: var(--text-faint); letter-spacing: 0.04em; }
 
 /* ── footer progress ─────────────────────────────────────────────────────── */
