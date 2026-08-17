@@ -87,8 +87,44 @@ pushes a frame to real glass.
   accepted cost of one token, and it upgrades the daemon's last-good-state cache
   from nice-to-have to mandatory.
 
+- **OAuth flow and token store** — `src/auth/`, ready to run the moment a client
+  ID exists. Zero new dependencies.
+  - `src/auth/oauth.js` — Google desktop-app flow: loopback redirect on an
+    ephemeral 127.0.0.1 port, PKCE S256, `state` CSRF check, `access_type=offline`
+    and `prompt=consent` so a refresh token is reliably returned. `OAuthClient`
+    refreshes transparently with a 5-minute margin, collapses concurrent
+    refreshes into one call, and retries once on a mid-flight 401.
+  - `src/auth/tokens.js` — atomic token store (temp file + rename, mode 0600).
+    Merging never drops an existing `refresh_token`, because Google omits it on
+    refresh responses and a naive spread would force a full re-consent. Refuses
+    to persist a token with no refresh token at all. `describe()` returns a
+    safe-to-log summary containing no token material.
+  - `src/auth/login.js` — `npm run auth`, plus `--status`, `--logout <account>`,
+    `--force`. On success it lists every visible calendar with its real id and
+    `accessRole`, and emits a paste-ready `calendars` map for `ApiProvider`.
+  - **Read-only enforced structurally.** `requestedScopes()` validates against a
+    scope allowlist and throws on anything that could write, so no later edit
+    quietly widens access (project_goals.md principle 2).
+- `npm run auth` script, using Node's built-in `--env-file-if-exists=.env` — no
+  dotenv dependency. Needs Node ≥ 22.9 for that flag; local is 24.13.1.
+
 ### Fixed
-- Nothing yet.
+- **The token store must not live in the repo.** `.gitignore` listed `tokens/`
+  and `*.token.json`, implying in-repo storage — but this repo is inside
+  OneDrive, so a Balcom refresh token written there would be uploaded to
+  Microsoft. Gitignore stops git, not OneDrive. The store now defaults to
+  `%LOCALAPPDATA%\Peripheral\tokens.json`, outside both the repo and sync scope,
+  overridable via `PERIPHERAL_TOKEN_PATH`. The gitignore rules stay as a second
+  line of defence. Directly serves project_goals.md principle 4.
+- **Loopback callback crashed on a second request.** The handler read
+  `server.address().port`, which returns `null` once the server is closing, and
+  browsers routinely send a follow-up request (favicon, or a reload) down the
+  same keep-alive socket. That threw inside the handler and would have taken down
+  `npm run auth` *after* consent already succeeded — the worst possible timing,
+  since the token was already granted. The port is now captured once at listen
+  time, a `settled` flag makes later requests inert (204), responses set
+  `connection: close`, and shutdown drops keep-alive sockets so the process
+  exits. Caught by testing the favicon case rather than by reading the code.
 
 ### Known unknowns
 - **Whether Balcom permits third-party OAuth app access.** The entire calendar

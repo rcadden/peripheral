@@ -101,7 +101,8 @@ the contract.
 
 | Value | Status |
 |---|---|
-| Google OAuth client ID / secret | **NOT YET CREATED** |
+| Google OAuth client ID / secret | **NOT YET CREATED.** Create as **Desktop app** in a *personal* Cloud project, not Balcom's. Flow is written — `npm run auth`. |
+| Token store | `%LOCALAPPDATA%\Peripheral\tokens.json` — **outside the repo on purpose.** The repo is in OneDrive; a refresh token must not sync to Microsoft. Override with `PERIPHERAL_TOKEN_PATH`. |
 | Personal calendar | `grcadden@gmail.com` — confirmed reachable. Also natively shared **into** the work calendar, which is how the primary gets it. |
 | Work calendar (Balcom) | **PRIMARY account — critical path.** Direct OAuth, untested. Sharing work→personal is confirmed blocked; see below. |
 | Server port | `4780` (1280 wide, 480 tall), override `PERIPHERAL_PORT` |
@@ -150,6 +151,20 @@ Workspace that blocks the former commonly permits the latter. Do not infer route
 **The OAuth client does not need to live in the Balcom org.** Create it in a
 personal Google Cloud project and authorise the work account against it. Only
 the consent step touches Balcom policy.
+
+**To test it** (the flow is already written — `src/auth/`):
+1. Google Cloud console as `grcadden@gmail.com`, new project.
+2. Enable the Google Calendar API.
+3. Credentials → OAuth client → type **Desktop app**.
+4. Consent screen: add `ricky.cadden@balcomagency.com` as a test user.
+5. Put the client id/secret in `.env`, then `npm run auth` and sign in **as the
+   Balcom account**.
+
+Success prints every visible calendar with its real id and `accessRole`. That
+listing is the verification: it proves the token works, proves Balcom permits
+third-party app access, and shows whether the shared-in personal calendar
+arrives with full details or only free/busy. A `freeBusyReader` role means no
+event titles — reshare with "See all event details" if so.
 
 `src/sources/gcal.js` is a provider interface so all three routes drop in
 interchangeably. Nothing else in the build depends on which one we get.

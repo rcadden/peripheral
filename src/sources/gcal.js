@@ -78,8 +78,8 @@ export class CalendarProvider {
  *   new ApiProvider({
  *     account: 'work',
  *     calendars: {
- *       'ricky@balcomagency.com': 'work',
- *       'grcadden@gmail.com':     'personal',
+ *       'ricky.cadden@balcomagency.com': 'work',
+ *       'grcadden@gmail.com':            'personal',
  *     },
  *   })
  *

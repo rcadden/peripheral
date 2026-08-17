@@ -10,6 +10,7 @@
   "scripts": {
     "serve": "node src/server.js",
     "start": "node src/daemon.js",
+    "auth": "node --env-file-if-exists=.env src/auth/login.js",
     "palette": "node src/palette.js",
     "probe": "node src/transport/probe.js"
   },

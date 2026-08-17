@@ -24,11 +24,16 @@ Sprints are thematic, not time-boxed. `- [x]` marks done; nothing is deleted.
 - [ ] **Verify Balcom permits third-party OAuth app access** — the one untested
       assumption the plan rests on. Separate Workspace control from the sharing
       restriction that killed route 2; do not infer it from that failure.
-- [ ] **Google OAuth: create desktop client in a *personal* Cloud project,
-      authorise the *work* account, token store**
-- [ ] Enumerate real calendarIds via `calendarList.list`, map them to display
-      labels (`work` / `personal`) — ids for shared-in calendars must be
-      verified, not assumed
+- [x] OAuth flow + token store written (`src/auth/`, `npm run auth`) — PKCE
+      loopback, atomic store outside OneDrive, read-only scope allowlist.
+      Untested against Google; needs a client ID.
+- [ ] **Create the OAuth desktop client in a *personal* Cloud project and
+      authorise the *work* account** — needs Ricky; `npm run auth` does the rest
+- [ ] Enumerate real calendarIds and map them to display labels
+      (`work` / `personal`) — `npm run auth` prints these and emits a
+      paste-ready map; ids for shared-in calendars must be verified, not assumed
+- [ ] Implement `ApiProvider.fetchToday()` — `events.list` per mapped calendar,
+      `singleEvents=true`, drop cancelled, treat declined as absent
 - [ ] **Real calendar data behind `/api/state`, single work account**
 - [ ] Confirm Windows enumerates `0416:5302` on arrival (`npm run probe`)
 - [ ] **HID transport: JPEG frame push at 1 fps**
