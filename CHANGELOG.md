@@ -576,6 +576,10 @@ pushes a frame to real glass.
 - **Verified through `src/render.js`**, not only in a browser: the fix relies on
   subgrid, and Playwright's Chromium is a different build from the in-app one.
   Captured JPEG shows the gap present and all titles aligned at x=974.42.
+- **Confirmed on the glass by Ricky, 2026-08-18: *"Reads correctly - much
+  better."*** Closes the loop at the only tier that counts — the defect was
+  found by eye and is now signed off by eye. Nothing measured it in between
+  except at the moment it was already being fixed.
 - `.empty` gained `grid-column: 1 / -1`; without it the empty-state text would
   be trapped in the 13px tick column now that `.events` is a grid.
 
