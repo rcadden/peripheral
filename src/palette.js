@@ -30,8 +30,13 @@ export const WALLPAPER_PATH = path.join(
 /* Contrast floors, by role. WCAG AA body text is 4.5:1; we hold the primary
  * tiers well above it because this is glanced at, not read. The faint tier is
  * intentionally below AA — it carries events already in the past, where low
- * salience IS the information. */
-const GATE = { hero: 4.5, cool: 7.0, text: 7.0, dim: 4.5, faint: 3.0 };
+ * salience IS the information.
+ *
+ * `calendar` is its own tier (2026-08-18): a small tick/dot marking which
+ * calendar an event is on, distinct from `hero`/`cool`'s job of marking
+ * urgency. Floored at 6.0, not 4.5 — Ricky, explicitly: "contrast is the
+ * point." A tiny marker that's easy to miss defeats the purpose entirely. */
+const GATE = { hero: 4.5, cool: 7.0, text: 7.0, dim: 4.5, faint: 3.0, calendar: 6.0 };
 
 /* Why --accent-hero's floor is 4.5 and not 7.0 (lowered 2026-08-17).
  *
@@ -83,6 +88,23 @@ const GATE = { hero: 4.5, cool: 7.0, text: 7.0, dim: 4.5, faint: 3.0 };
  */
 const HERO_HUE = Number(process.env.PERIPHERAL_HERO_HUE ?? 212);
 const COOL_HUE = Number(process.env.PERIPHERAL_COOL_HUE ?? 210);
+
+/* Calendar-identity hues (2026-08-18) — a separate concern from HERO_HUE/
+ * COOL_HUE above, which mark URGENCY (now / next) and stay blue on purpose.
+ * Ricky, when offered "shades of one hue" for calendar identity: "I don't
+ * want shades - I want completely different colors. Contrast is the point."
+ * So these are genuinely different hue families, chosen to sit far from
+ * both the blue accents (~210) AND the amber --stale badge (~30):
+ *   work      ~140, green — reads clearly, and luminance weights green
+ *             heavily (0.7152), so it clears a high contrast floor without
+ *             desaturating toward pastel the way the blues had to.
+ *   personal  ~330, magenta/pink — far from both green and blue, and not
+ *             readable as an error/alert state the way pure red would be.
+ * Being genuinely different hues from accent-hero/accent-cool is what makes
+ * this safe to introduce at all — a calendar tick and a phase tick never
+ * compete for the same meaning. */
+const CALENDAR_WORK_HUE = Number(process.env.PERIPHERAL_CALENDAR_WORK_HUE ?? 140);
+const CALENDAR_PERSONAL_HUE = Number(process.env.PERIPHERAL_CALENDAR_PERSONAL_HUE ?? 330);
 
 /* ── colour maths ───────────────────────────────────────────────────────── */
 
@@ -226,6 +248,12 @@ export function deriveTokens({ dominantHue, secondaryHue, meanSat }) {
   const text = gated(hD, 0.16, 0.93, groundRgb, GATE.text);
   const dim = gated(hD, 0.12, 0.60, groundRgb, GATE.dim);
   const faint = gated(hD, 0.10, 0.42, groundRgb, GATE.faint);
+  // Calendar-identity accents — fixed hues (see CALENDAR_*_HUE above), high
+  // saturation floor for the same "don't read as grey at 6.86"" reason the
+  // blues use, gated at 6.0 rather than borrowing hero/cool's floors because
+  // this is its own tier with its own point (visibility of a small marker).
+  const calWork = gated(CALENDAR_WORK_HUE, 0.65, 0.45, groundRgb, GATE.calendar);
+  const calPersonal = gated(CALENDAR_PERSONAL_HUE, 0.65, 0.55, groundRgb, GATE.calendar);
 
   return {
     tokens: {
@@ -237,6 +265,8 @@ export function deriveTokens({ dominantHue, secondaryHue, meanSat }) {
       '--text-faint': toHex(faint.rgb),
       '--accent-hero': toHex(hero.rgb),
       '--accent-cool': toHex(cool.rgb),
+      '--accent-calendar-work': toHex(calWork.rgb),
+      '--accent-calendar-personal': toHex(calPersonal.rgb),
       '--stale': '#d98a3d',
     },
     report: {
@@ -249,6 +279,8 @@ export function deriveTokens({ dominantHue, secondaryHue, meanSat }) {
         text: +contrast(text.rgb, groundRgb).toFixed(2),
         dim: +contrast(dim.rgb, groundRgb).toFixed(2),
         faint: +contrast(faint.rgb, groundRgb).toFixed(2),
+        calWork: +contrast(calWork.rgb, groundRgb).toFixed(2),
+        calPersonal: +contrast(calPersonal.rgb, groundRgb).toFixed(2),
       },
     },
   };
@@ -268,6 +300,8 @@ export function renderCss({ tokens, report }) {
      --text        ${String(r.text).padStart(6)}:1  (floor ${GATE.text})
      --text-dim    ${String(r.dim).padStart(6)}:1  (floor ${GATE.dim})
      --text-faint  ${String(r.faint).padStart(6)}:1  (floor ${GATE.faint}, de-emphasised tier)
+     --accent-calendar-work     ${String(r.calWork).padStart(6)}:1  (floor ${GATE.calendar})
+     --accent-calendar-personal ${String(r.calPersonal).padStart(6)}:1  (floor ${GATE.calendar})
    ───────────────────────────────────────────────────────────────────────── */
 
 :root {

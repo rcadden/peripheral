@@ -152,15 +152,35 @@ sprint gates they only made a sprint look stalled.
 
 **Sprint 1 is complete.** The panel shows Ricky's real day.
 
-## Sprint 2 — Agenda, second pass
+## Sprint 2 — Agenda, second pass — **COMPLETE 2026-08-18**
 
-**The question: is the one pane right?** Everything here came from living with
-real data on the real panel, 2026-08-17 and 2026-08-18.
+**The question it answered: is the one pane right?** Ricky, closing it out:
+*"consider Sprint 2 completed. We'll work on Sprint 3 tomorrow (maybe)."*
+Everything here came from living with real data on the real panel across
+2026-08-17 and 2026-08-18 — the third pane, overlap precedence, and
+colour-coding were all built or substantially reshaped from real feedback
+rather than designed upfront and shipped once.
+
+**Closed with two items not fully `[x]`, on purpose, not by oversight:**
+- **Overlap precedence stays `[~]`.** Ricky's own words when it shipped:
+  "this will likely take consistent tweaking, both in the device logic, but
+  also IRL the way that meetings get put on this calendar." It's a living
+  system now, not a sprint deliverable with an end state — watch for real
+  cases it gets wrong rather than expecting it to reach `[x]`.
+- **`focusTime`/`outOfOffice` taking the hero slot is still genuinely open**
+  (below) — a judgement call, not a build, and closing the sprint doesn't
+  answer it. Carried forward rather than force-closed.
+- **Also carried forward, explicitly deferred rather than dropped: the
+  colour palette needs a rework.** Ricky, same closing message: *"We'll
+  need to rework the color palette, but let's put that on a future
+  tuning/optimization sprint."* Green/pink cleared the contrast gate but
+  were not a considered final choice. Not scheduled to a specific sprint
+  yet — surface it when picking the next design-heavy piece of work.
 
 *Was "Sprint 2 — More of life", whose "New panes" half is now Sprints 3 and 4.*
 
-**Three of these need Ricky before any code.** They are tagged `NEEDS RICKY` so
-a session does not pick one up and stall halfway.
+**Three of these needed Ricky before any code.** They were tagged
+`NEEDS RICKY` so a session would not pick one up and stall halfway.
 
 - [x] **Third pane: "and then what?"** — **BUILT 2026-08-18.** A middle
       column now sits between the hero and the agenda list (`.then` in
@@ -341,13 +361,42 @@ a session does not pick one up and stall halfway.
       including the real BAL-Thurs/M2M case, the Norah's-game work-match
       case, and the Reese-practice/"Ricky GTD" false-positive case as
       regression tests by name.
-- [ ] **Colour-code entries by calendar** — one colour for personal, one for
-      work, and possibly shades within work driven by *who is in the meeting*
-      (a 1:1 with a direct report reading differently from a 40-person
-      all-hands). Constraint to respect: the palette gate caps how many colours
-      can clear 7:1 against the ground, and two accents already sit on adjacent
-      rows in the agenda list. Shades-of-one-hue is likelier to work than more
-      hues. Needs design work before implementation.
+- [x] **Colour-code entries by calendar — BUILT 2026-08-18.** Roadmap
+      originally guessed "shades of one hue is likelier to work than more
+      hues." **Wrong guess — Ricky, directly: "I don't want shades - I want
+      completely different colors. Contrast is the point."** Two new
+      palette tokens, computed through the real contrast gate rather than
+      hand-picked: `--accent-calendar-work` (green, #28bd5a, 7.97:1) and
+      `--accent-calendar-personal` (pink/magenta, #df68a3, 6.22:1), floored
+      at 6.0 — higher than the decorative tiers, because a marker nobody
+      notices defeats the purpose. Deliberately different hue FAMILIES from
+      the existing blue accents (which mean urgency — now/next — and stay
+      blue), so a calendar colour and a phase colour never compete for the
+      same meaning.
+      **Went through two rounds of "not visible enough" the same session.**
+      First cut: a small dot next to the hero/then title, a tinted tick in
+      the agenda list. Ricky: *"I don't want just the little buttons... The
+      dots aren't big/obvious enough to see (especially from 3ft away)."*
+      Second cut: the agenda list's title TEXT itself is now calendar-
+      coloured on every row. Third correction: *"Make sure the timestamp is
+      also coloured"* — the time column now matches the title. The tick is
+      the only thing still phase-coloured (blue) on is-now/is-next rows —
+      once time and title both carry calendar colour, the tick is what's
+      left to say "this one's happening now."
+      Hero/then keep the smaller dot-in-front-of-title treatment (title
+      text itself stays neutral there, for legibility on the panel's single
+      most important line) — Ricky's objection was specifically about the
+      agenda list, not those two panels.
+      **Deferred, not forgotten: the actual hue choices need a rework.**
+      Ricky, closing this out: *"We'll need to rework the color palette, but
+      let's put that on a future tuning/optimization sprint."* Green/pink
+      were a reasonable first pass through the contrast gate, not a
+      considered final choice — revisit before calling this settled. `other`/
+      `travel`/`athletics`/`holidays` still render neutral, unchanged from
+      the original two-colour scope (personal, work).
+      Scope note, also resolved: the "shades within work by attendee count"
+      idea from the original roadmap text is dropped, not deferred — "I
+      don't want shades" rules it out along with the hue-shading approach.
 - [ ] Revisit whether `focusTime` and `outOfOffice` should be able to take the
       hero slot. **`NEEDS RICKY`** — a judgement, not a build. Kept deliberately
       — blocked time is real time — but a countdown to "Focus time" may read as
@@ -356,13 +405,18 @@ a session does not pick one up and stall halfway.
       motivated this (a two-hour block outranking a 30-minute meeting) is gone.
       What remains is narrower — whether a block should hold the hero when
       nothing else is live.*
-- [ ] **Re-decide the accent blue and the type scale after a few days of real
-      use.** **`NEEDS RICKY` — and this one is DUE.** Both were accepted
-      provisionally on 2026-08-17, explicitly "not final". Queued here so the
-      revisit is a scheduled step rather than something that only happens if
-      Ricky remembers to complain. *He has now read the panel across two days,
-      including spotting a spacing defect on it unaided (2026-08-18) — which is
-      exactly the informed look this was waiting for.*
+- [x] **Re-decide the accent blue and the type scale after a few days of real
+      use.** Both were accepted provisionally on 2026-08-17, explicitly "not
+      final" — queued so the revisit would be a scheduled step rather than
+      something that only happens if Ricky remembers to complain. **Revisited
+      and accepted, 2026-08-18: "The blue and typescale are good for now.
+      Mark them as complete for now."** Read the panel across two days first,
+      including spotting a spacing defect on it unaided and living through a
+      full afternoon of layout changes — the informed look this was waiting
+      for. **"For now," not "forever"** — consistent with how every other
+      design acceptance on this project is recorded; a future reversal is
+      not a regression. See `[[design-decisions-are-provisional]]` in
+      memory.
 - ~~**See the `travel` label render at least once.**~~ **MOVED 2026-08-18 to
       Standing watch** (top of this file). It cannot be closed by working on it:
       the TripIt feed returned zero events, so it needs Ricky to actually have a

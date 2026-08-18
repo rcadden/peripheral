@@ -1,7 +1,7 @@
 /* ─────────────────────────────────────────────────────────────────────────
    tokens.css — GENERATED. Do not hand-edit; `npm run palette` overwrites.
 
-   Sampled 2026-08-17T18:45:18.942Z from the current wallpaper.
+   Sampled 2026-08-18T19:47:53.342Z from the current wallpaper.
      dominant hue 202.5deg · secondary hue 202.5deg · mean sat 0.478
 
    Hue comes from the wallpaper. Lightness is forced, then gated:
@@ -10,6 +10,8 @@
      --text         16.84:1  (floor 7)
      --text-dim      6.96:1  (floor 4.5)
      --text-faint    3.74:1  (floor 3, de-emphasised tier)
+     --accent-calendar-work       7.97:1  (floor 6)
+     --accent-calendar-personal   6.22:1  (floor 6)
    ───────────────────────────────────────────────────────────────────────── */
 
 :root {
@@ -21,6 +23,8 @@
   --text-faint: #606e76;
   --accent-hero: #0d78f2;
   --accent-cool: #79a1c8;
+  --accent-calendar-work: #28bd5a;
+  --accent-calendar-personal: #df68a3;
   --stale: #d98a3d;
 
   /* geometry — the panel is a fixed 1280x480 of glass */

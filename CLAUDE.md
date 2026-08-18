@@ -42,9 +42,21 @@ that runs shorter than it's booked, a tiebreak change (latest start wins,
 not ending soonest), and personal-calendar events demoted-by-default unless
 claimed by name or a matching work-calendar block. Explicitly not settled —
 Ricky expects ongoing tuning both in the logic and in how he titles future
-calendar entries. Remaining in Sprint 2: one `NEEDS RICKY` decision (the
-accent blue/type scale revisit — still overdue) and one design item
-(colour-code by calendar).
+calendar entries.
+
+**Sprint 2 — Agenda, second pass — is COMPLETE, 2026-08-18.** Ricky: "consider
+Sprint 2 completed. We'll work on Sprint 3 tomorrow (maybe)." Last item was
+colour-coding by calendar — two new contrast-gated tokens, genuinely different
+hue families from the phase-urgency blues (Ricky rejected the roadmap's own
+"shades of one hue" guess: "I want completely different colors. Contrast is
+the point"), applied to the agenda list's title AND timestamp after two rounds
+of "not visible enough." The accent blue/type scale revisit also closed this
+session ("good for now, mark them as complete"). Two things carried forward
+rather than force-closed: overlap precedence stays a living, ongoing-tuning
+system rather than a finished deliverable, and whether `focusTime`/
+`outOfOffice` should ever take the hero slot is still open. Also queued,
+not yet scheduled to a sprint: **the colour palette itself needs a rework**
+— green/pink cleared the contrast gate but weren't a considered final choice.
 
 **The roadmap was renumbered 2026-08-18** — Sprint 2 bundled agenda polish with
 a multi-pane system and is now split into Sprints 2, 3 and 4; the release sprint
@@ -65,7 +77,7 @@ the entire fetch path in one go.
 </details>
 
 > **Starting a session? Read
-> [`docs/plans/session-handoff-2026-08-18d.md`](docs/plans/session-handoff-2026-08-18d.md)
+> [`docs/plans/session-handoff-2026-08-18e.md`](docs/plans/session-handoff-2026-08-18e.md)
 > first.** It has the ordered next actions, what is verified and by what
 > method, and the open questions that need Ricky.
 

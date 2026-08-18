@@ -156,6 +156,19 @@ body {
   overflow: hidden;
 }
 
+/* Calendar identity, 2026-08-18 — a colour dot in front of the title, never
+   the title's own text colour (that stays neutral so it's always legible
+   regardless of which calendar-colour happens to land there). Sized for the
+   39px title it sits in front of; the agenda list's much smaller tick gets
+   the same tint via an inline style instead of this class. */
+.title .cal-dot {
+  display: inline-block;
+  width: 13px;
+  height: 13px;
+  margin-right: 11px;
+  vertical-align: 1px;
+}
+
 /* Was one `·`-joined line. Ricky, 2026-08-18: the time range wrapped
    mid-string because the whole joined line ran past the column width, and
    separately there was dead space between the title and this line

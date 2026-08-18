@@ -137,14 +137,19 @@ function remainingSizeClass(text) {
  * match guessLabel() in src/sources/gcal.js, which is what the daemon uses
  * when no map is configured. An unknown key still renders, dimmed.
  *
- * Currently unused by any renderer — the meta line dropped the calendar
- * label 2026-08-18 ("obvious from the event name"). Kept rather than
- * deleted: it's exactly what Sprint 2's "colour-code entries by calendar"
- * item needs (see roadmap.md), likely applied to the tick/title color
- * instead of a text label. Delete only if that item is dropped too. */
+ * `tint` is used two places: the agenda-list tick on ordinary rows
+ * (renderList), and a small dot beside the hero/then title
+ * (renderCalendarDot) — never the title text itself, which stays neutral
+ * for legibility. work/personal use `--accent-calendar-*`, deliberately
+ * DIFFERENT hues from `--accent-hero`/`--accent-cool` (2026-08-18) — those
+ * two are reserved for URGENCY (now/next) and stay blue. Ricky, when shades
+ * of one hue were offered instead: "I don't want shades - I want completely
+ * different colors. Contrast is the point." Being genuinely different hues
+ * is what lets a calendar tick and a phase tick coexist without competing
+ * for the same meaning. */
 const CALENDARS = {
-  work: { label: 'Balcom', tint: 'var(--accent-cool)' },
-  personal: { label: 'Personal', tint: 'var(--accent-hero)' },
+  work: { label: 'Balcom', tint: 'var(--accent-calendar-work)' },
+  personal: { label: 'Personal', tint: 'var(--accent-calendar-personal)' },
   // TripIt feed on the work account — flights and hotels. An imported feed, so
   // it refreshes on Google's schedule (8–24h) rather than in real time; fine
   // for a flight tomorrow, not something to trust to the minute.
@@ -256,7 +261,7 @@ function renderHero(focus, marked, allDay, now) {
     if (!marked.length && allDay.length) {
       el.countdown.textContent = 'CLEAR';
       el.countdown.className = 'countdown';
-      el.title.textContent = allDay[0].title;
+      el.title.innerHTML = titleWithDot(allDay[0].title, allDay[0].calendar);
       el.meta.innerHTML = `<div class="meta-line"><span>All day</span>`
         + (allDay.length > 1 ? `<span class="sep">·</span><span>+${allDay.length - 1} more</span>` : '')
         + `</div>`;
@@ -282,7 +287,7 @@ function renderHero(focus, marked, allDay, now) {
   el.countdown.className = ['countdown', isNow ? remainingSizeClass(text) : countdownSizeClass(text), isNow ? 'is-now' : '']
     .filter(Boolean).join(' ');
 
-  el.title.textContent = focus.title;
+  el.title.innerHTML = titleWithDot(focus.title, focus.calendar);
   el.meta.innerHTML = buildMetaHtml(focus);
 }
 
@@ -341,13 +346,18 @@ function renderThen(focus, next) {
   el.thenCountdown.textContent = text;
   el.thenCountdown.className = ['countdown', countdownSizeClass(text)].filter(Boolean).join(' ');
 
-  el.thenTitle.textContent = next.title;
+  el.thenTitle.innerHTML = titleWithDot(next.title, next.calendar);
   el.thenMeta.innerHTML = buildMetaHtml(next);
 }
 
-/** The meta line under a title: calendar dot + label, time range, conference,
- * location, attendee count. Shared by the hero and the "then" column — same
- * event shape, same line. */
+/** A small calendar-colour dot in front of a title — hero/then only, never
+ * the agenda list (which colours the tick instead). The title text itself
+ * stays neutral for legibility; only this dot carries calendar identity. */
+function titleWithDot(title, calendarKey) {
+  const tint = (CALENDARS[calendarKey] || {}).tint || 'var(--text-dim)';
+  return `<span class="cal-dot" style="background:${tint}"></span>${esc(title)}`;
+}
+
 /**
  * Was one inline line, `·`-joined. Ricky, 2026-08-18: the time range wrapped
  * mid-string ("2:00 PM – 2:30" / "PM") because the whole joined line was too
@@ -438,10 +448,20 @@ function renderList(marked, allDay, focus, next, now) {
     // while it was clearly the "up next" event in the middle column.
     const cls = ev.phase === 'now' ? 'is-now'
       : next && ev.id === next.id ? 'is-next' : '';
+    const tint = (CALENDARS[ev.calendar] || {}).tint || 'var(--text-faint)';
+    // A tick-only dot wasn't visible enough at 6.86" from three feet — Ricky:
+    // "I want the full listing ... the title of the event" coloured, not a
+    // small marker, and then: "make sure the timestamp is also coloured."
+    // Title AND time now carry calendar colour on EVERY row, including
+    // is-now/is-next — the inline style wins over the phase-colour CSS class
+    // there, same as it already did for the title. The tick is the one thing
+    // still phase-coloured (blue) on those two rows; it's the only urgency
+    // signal left once time+title both went to calendar colour.
+    const tickStyle = cls ? '' : ` style="background:${tint}"`;
     return `<li class="event ${cls}">`
-      + `<span class="tick"></span>`
-      + `<span class="when">${fmtTimeShort(new Date(ev.start))}</span>`
-      + `<span class="what">${esc(ev.title)}</span>`
+      + `<span class="tick"${tickStyle}></span>`
+      + `<span class="when" style="color:${tint}">${fmtTimeShort(new Date(ev.start))}</span>`
+      + `<span class="what" style="color:${tint}">${esc(ev.title)}</span>`
       + `</li>`;
   }).join('');
 
