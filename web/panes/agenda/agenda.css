@@ -176,15 +176,44 @@ body {
   flex-direction: column;
 }
 
-.events { list-style: none; display: flex; flex-direction: column; gap: 13px; min-height: 0; }
+/* The list owns the column geometry so every row shares it.
+ *
+ * Each row used to be its own independent grid, which meant a content-sized
+ * time column resolved PER ROW: the 19px "ALL DAY" row got 88.58px and the
+ * 24px timed rows got 114.42px, so the titles started at two different x
+ * positions. Sizing here and having rows subgrid it gives one column measured
+ * across the whole list — content-driven and still aligned. */
+.events {
+  list-style: none;
+  display: grid;
+  grid-template-columns: 13px max-content 1fr;
+  gap: 13px 12px;
+  min-height: 0;
+}
 
 .event {
   display: grid;
-  /* Time column must hold the widest form — "12:30 AM" — without colliding
-     with the title. Right-aligned so the digits stack cleanly down the list. */
-  grid-template-columns: 13px 104px 1fr;
+  /* Time column is sized by its content, NOT by a fixed px value.
+   *
+   * It was `104px`, with a comment promising that held the widest form. It did
+   * not. At the 24px this row actually uses, "10:00 AM" measures 114.42px, so
+   * the text overflowed its column and closed the 12px gap down to 1.58px —
+   * which reads on the panel as a missing space: "10:00 AMWeekly DS + Media".
+   * Seen on the glass by Ricky 2026-08-18; the daemon called it panel=ok
+   * throughout, because a layout defect is invisible to every health metric.
+   *
+   * The fixed value was not merely mis-tuned, it was re-derived at the wrong
+   * type size: 104px is correct at 16px (76.28px) and at 20px (95.36px), and
+   * wrong at 24px. Any number here is only valid for the size it was measured
+   * at, and the row size has now changed twice.
+   *
+   * The column is now sized once on `.events` (see above) and adopted here via
+   * subgrid, so it is content-driven, cannot fall behind a type change, and is
+   * identical on every row. Right-aligned with tabular-nums so the digits still
+   * stack cleanly down the list. Gutters come from the parent. */
+  grid-template-columns: subgrid;
+  grid-column: 1 / -1;
   align-items: baseline;
-  gap: 0 12px;
   font-size: 24px;
   letter-spacing: 0.01em;
   color: var(--text-dim);
@@ -223,7 +252,9 @@ body {
   transform: rotate(45deg);
 }
 
-.empty { font-size: 24px; color: var(--text-faint); letter-spacing: 0.04em; }
+/* Spans the full width: `.events` is a 3-column grid now, and without this the
+   empty-state text would be trapped in the 13px tick column. */
+.empty { grid-column: 1 / -1; font-size: 24px; color: var(--text-faint); letter-spacing: 0.04em; }
 
 /* ── footer progress ─────────────────────────────────────────────────────── */
 

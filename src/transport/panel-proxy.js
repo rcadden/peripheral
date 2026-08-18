@@ -37,7 +37,8 @@ const WORKER_URL = new URL('./hid-worker.js', import.meta.url);
  * intervals: long enough that a single slow frame is not an alarm, short enough
  * that it fires well before a human notices the panel sitting on its logo.
  */
-const STALL_AFTER_MS = KEEPALIVE_INTERVAL_MS * 3;
+const STALL_AFTER_MS = Number(
+  process.env.PERIPHERAL_STALL_AFTER_MS ?? KEEPALIVE_INTERVAL_MS * 3);
 
 /**
  * A worker silent this long is not stalled, it is gone. Respawning is a last
@@ -49,14 +50,14 @@ const STALL_AFTER_MS = KEEPALIVE_INTERVAL_MS * 3;
  * is the only in-process recovery available, and the alternative is a panel
  * that stays dark until someone replugs it.
  */
-const RESPAWN_AFTER_MS = 60_000;
+const RESPAWN_AFTER_MS = Number(process.env.PERIPHERAL_RESPAWN_AFTER_MS ?? 60_000);
 
 /**
  * How long `open()` waits before letting the daemon get on with its life.
  * Generous against a normal open (enumeration plus a 1s handshake read) and
  * still far short of a user noticing the panel is dark.
  */
-const OPEN_TIMEOUT_MS = 10_000;
+const OPEN_TIMEOUT_MS = Number(process.env.PERIPHERAL_OPEN_TIMEOUT_MS ?? 10_000);
 
 /* ── The stall decision, as pure functions ────────────────────────────────
  * Extracted for the same reason `focus.js` was: logic that `test/` cannot reach
@@ -158,6 +159,8 @@ export class PanelProxy {
   #onReady = null;
   #watchdog = null;
   #stallAnnounced = false;
+  #peakPushMs = 0;
+  #peakSlowRun = 0;
   /** When the watchdog last fired, for measuring how late the next one is. */
   #lastWatchdogAt = 0;
   /** How long this thread was demonstrably not listening. See stallState(). */
@@ -169,6 +172,29 @@ export class PanelProxy {
   get failures() { return this.#status.failures; }
   get lastPushMs() { return this.#status.lastPushMs; }
   get respawns() { return this.#respawns; }
+  /** Consecutive pushes that outran the panel's forget window. */
+  get slowRun() { return this.#status.slowRun ?? 0; }
+
+  /* ── Peaks, held since the last reset ────────────────────────────────────
+   * `lastPushMs` is a single sample and is worse than useless for the failure
+   * this whole file exists for. Measured: the worker completed a 4012ms push
+   * and reported it, then completed a 4ms push and reported that too — both
+   * before any main-thread timer got a turn. A poller reading `lastPushMs`
+   * saw 4ms. The one push that mattered was invisible.
+   *
+   * So the peak is recorded as messages ARRIVE, which is the only place that
+   * sees every report, and the heartbeat drains it each interval. A slow push
+   * can now never be swallowed by a faster one landing behind it. */
+  get peakPushMs() { return this.#peakPushMs; }
+  get peakSlowRun() { return this.#peakSlowRun; }
+
+  /** Read-and-clear, for the heartbeat: reports the worst push in its window. */
+  drainPeaks() {
+    const peaks = { pushMs: this.#peakPushMs, slowRun: this.#peakSlowRun };
+    this.#peakPushMs = 0;
+    this.#peakSlowRun = 0;
+    return peaks;
+  }
 
   /** The live stall reading. One place, so the getters cannot disagree. */
   #stall(now = Date.now()) {
@@ -304,6 +330,9 @@ export class PanelProxy {
       case 'status':
         this.#status = msg;
         this.#lastStatusAt = msg.ts;
+        // Before anything can overwrite it — see the note on peakPushMs.
+        this.#peakPushMs = Math.max(this.#peakPushMs, msg.lastPushMs ?? 0);
+        this.#peakSlowRun = Math.max(this.#peakSlowRun, msg.slowRun ?? 0);
         if (this.#stallAnnounced) {
           this.#stallAnnounced = false;
           console.log('[panel] transport recovered — pushes completing again');

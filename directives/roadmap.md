@@ -109,9 +109,18 @@ Everything here came from living with real data on the real panel, 2026-08-17.
       the next event but not how much room there is before it.
       Open: what the middle pane shows when the gap is hours, or when nothing
       follows. "Clear until 4pm" is probably more useful than an empty column.
-- [ ] **Overlap precedence — needs real rules, not a clean shift.** Right now
-      the hero picks the concurrent event ENDING SOONEST, which is a decent
-      default but not the whole story. Ricky's read: work usually takes
+- [~] **Overlap precedence — needs real rules, not a clean shift.** ~~Right now
+      the hero picks the concurrent event ENDING SOONEST~~ **CORRECTED
+      2026-08-18: ending-soonest was wrong and is gone.** It failed on a real
+      day — at 4:10pm a 2:30–4:30 practice and a 4:00–4:45 meeting were both
+      live, and the practice ends first, so the panel demoted the meeting he was
+      sitting in. **The rule is now SHORTEST DURATION, ending-soonest breaking
+      ties**, on the reasoning that a short sharply-bounded event is a
+      commitment you are *in* while a long one is a container you are *inside
+      of*. See `web/panes/agenda/focus.js`, which now holds this logic and its
+      full history, and `test/focus.test.js`.
+      **Still open, and still wanting a conversation before code:** duration is
+      one signal, not the ruleset below. Ricky's read: work usually takes
       precedence, *but there are exceptions to every rule* — a kid's game beats
       a status meeting. Candidate signals to weigh rather than a single rule:
       calendar, whether he accepted vs. was invited, attendee count, whether
@@ -134,10 +143,13 @@ Everything here came from living with real data on the real panel, 2026-08-17.
 - [ ] **See the `travel` label render at least once.** The TripIt feed returned
       zero events on the day it was wired up, so that calendar's label and tint
       have never appeared on the panel. Not a known defect — a known blind spot.
-- [ ] **Watch an all-day event reach the panel.** The hero-hijack fix is tested
-      and was rendered from mock data, but the only real all-day event the
-      account produced was a `workingLocation` entry, which is now dropped
-      before the pane sees it. The fix has never been exercised by real data.
+- [x] **Watch an all-day event reach the panel.** ~~The fix has never been
+      exercised by real data.~~ **DONE 2026-08-18.** A genuine all-day entry
+      ("Donna Mills passed away", from a subscribed calendar) reached the pane
+      and behaved correctly: pinned at the top of the list, rendered with the
+      quiet `ALL DAY` label, and **did not take the hero** — the 10:00 AM
+      meeting did. Confirmed in a JPEG captured through `src/render.js`, so it
+      is verified at the Rendered tier rather than only tested.
 
 ### New panes
 - [ ] Pane cycling with per-pane dwell times

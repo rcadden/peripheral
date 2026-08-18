@@ -319,9 +319,15 @@ async function main() {
   setInterval(() => {
     const age = currentFrame ? Math.round((Date.now() - currentFrameAt) / 1000) : null;
     const lag = Math.max(0, Date.now() - lagMark - 1000);
+    /* worstPush, not lastPush. A single sample misses the push that matters:
+     * measured, the worker completed a 4012ms push and a 4ms push before this
+     * thread got a turn, and `lastPushMs` read 4ms. Drained each interval so
+     * the number always describes THIS window. */
+    const { pushMs: worstPush, slowRun } = panel.drainPeaks();
     console.log(`[daemon] pushed=${panel.pushed} failed=${panel.failures} ` +
                 `frameAge=${age === null ? 'none' : age + 's'} ` +
-                `lastPush=${panel.lastPushMs}ms loopLag=${lag}ms ` +
+                `worstPush=${worstPush}ms loopLag=${lag}ms ` +
+                `${slowRun ? `slowRun=${slowRun} ` : ''}` +
                 `panel=${panel.state} ` +
                 `renderer=${renderer.healthy ? 'ok' : 'down'}` +
                 `${panel.respawns ? ` respawns=${panel.respawns}` : ''}`);

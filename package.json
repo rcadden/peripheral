@@ -20,7 +20,8 @@
     "startup:status": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/startup.ps1 -Action status",
     "startup:logs": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/startup.ps1 -Action logs",
     "send": "node --env-file-if-exists=.env src/transport/send.js",
-    "idle-test": "node --env-file-if-exists=.env src/transport/idle-test.js"
+    "idle-test": "node --env-file-if-exists=.env src/transport/idle-test.js",
+    "stall-test": "node src/transport/stall-test.js"
   },
   "optionalDependencies": {
     "node-hid": "^3.4.0",

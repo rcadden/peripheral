@@ -547,6 +547,77 @@ pushes a frame to real glass.
   2026-08-17). The in-org project is the only one. Closes the housekeeping item
   raised when its client id/secret were exposed in a chat transcript.
 
+### Fixed — the agenda time column collided with the title (2026-08-18)
+
+- **Seen on the glass by Ricky:** list rows read `10:00 AMWeekly DS + Media…`
+  with no space. The daemon reported `panel=ok` throughout, because a layout
+  defect is invisible to every health metric this project has.
+- **Measured, not estimated.** `10:00 AM` at the row's actual 24px type is
+  **114.42px** in a **104px** column. It overflowed to the right, closing the
+  12px gutter down to **1.58px** — which at 6.86" reads as a missing space.
+- **The `104px` was not merely mis-tuned, it was re-derived at the wrong type
+  size.** The 2026-08-17 lesson recorded the column as "measured in the page at
+  **76.9px**, not estimated". That measurement is reproducible — at **16px**
+  the same string is 76.28px. It is also 95.36px at 20px and 114.42px at 24px.
+  So `104px` was correct at 16px and at 20px and wrong at the size actually
+  shipped. A measurement is only valid for the state it was taken in.
+- **Fixed by deleting the number, not re-tuning it.** `.events` now owns the
+  column (`grid-template-columns: 13px max-content 1fr`) and rows adopt it via
+  `grid-template-columns: subgrid`. Content-driven, so it cannot fall behind
+  another type change.
+- **A first attempt was wrong and is worth recording.** Putting `max-content`
+  on `.event` alone looked right and misaligned the list: each `<li>` is its own
+  grid, so the column resolved **per row** — 88.58px for the 19px `ALL DAY` row
+  against 114.42px for the 24px timed rows, leaving titles starting at two
+  different x positions. Subgrid is what makes one shared column possible.
+  `8ch` was also considered and rejected: it computes to 112.5px against the
+  114.42px needed, because `ch` excludes letter-spacing — a fudge factor away
+  from being the same magic number again.
+- **Verified through `src/render.js`**, not only in a browser: the fix relies on
+  subgrid, and Playwright's Chromium is a different build from the in-app one.
+  Captured JPEG shows the gap present and all titles aligned at x=974.42.
+- `.empty` gained `grid-column: 1 / -1`; without it the empty-state text would
+  be trapped in the 13px tick column now that `.events` is a grid.
+
+### Added — `npm run stall-test`, so the recovery paths are no longer theoretical (2026-08-18)
+
+The worker-thread fix shipped with every recovery branch unexecuted — slow-push
+detection, reopen, the stall alarm and the respawn were all "written but
+unverified", and a wedged USB endpoint is not reproducible on request. This
+injects the fault instead of waiting years for it.
+
+- `src/transport/stall-test.js` — a committed diagnostic, per the standing rule
+  that produced `npm run idle-test`. Runs under `PERIPHERAL_DRY_RUN`, writes
+  frames to a temp dir, and **never touches the panel**; safe with the daemon
+  live. Thresholds are env-overridable so a run takes seconds.
+- **`Atomics.wait` is the injection primitive**, deliberately: it blocks the
+  worker thread synchronously and uninterruptibly, which is the exact shape of
+  a stuck native call. A `setTimeout` would prove nothing, because it yields —
+  and yielding is the entire thing that was missing.
+- **Results, 13/13 checks:**
+  - **Main-thread loop lag during a 4-second worker block: 11–13ms.** That is
+    the headline number and the whole claim of the redesign. The same condition
+    on 2026-08-18 morning produced a 36,600ms stall.
+  - `open()` returned `false` at 2011ms against a 2000ms deadline instead of
+    hanging, with the reason recorded.
+  - The stall was reported as `STALLED 4s`, not hidden, and cleared itself to
+    `ok` automatically once the worker returned.
+  - Respawn fired after the configured silence, and **the replacement worker
+    pushed normally**. `terminate()` did kill the blocked worker here (exit
+    code 1) — but see Known unknowns: `Atomics.wait` is not a native driver
+    call, so this does **not** establish the same against a real wedged
+    `node-hid` write.
+- **The diagnostic immediately found a real observability defect.** The
+  heartbeat reported `lastPush`, a single sample — and the worker completed a
+  **4012ms** push and a **4ms** push back-to-back before the main thread got a
+  turn, so `lastPush` read **4ms**. The one push that mattered was invisible.
+  `PanelProxy` now holds the peak as messages arrive (the only place that sees
+  every report) and the heartbeat drains it, reporting **`worstPush`** for the
+  interval. A slow push can no longer be swallowed by a faster one behind it.
+  - Two of the diagnostic's own assertions failed first for exactly this
+    reason: a timer-based sampler on the main thread could never observe the
+    peak. The fix belonged in the proxy, not the test.
+
 ### Changed — the hero pick moved out of the pane and got a rule that holds (2026-08-18)
 
 - **`web/panes/agenda/focus.js` (new)** — `classify()`, `pickFocus()` and
@@ -768,11 +839,25 @@ before the fix existed and is left as-is.
     panel holds during a genuinely busy machine — a Teams call and a build —
     which is the harder half of the original question and needs a loaded PC
     rather than a quiet one.
-- **Whether the respawn path works, and whether `terminate()` can interrupt a
-  blocked native call.** Written, never executed — no stall has occurred since
-  the fix landed, which is the point but leaves the recovery branch untested on
-  hardware. Documented in `panel-proxy.js` as an honest caveat rather than a
-  guarantee: a truly wedged endpoint may still need a replug.
+- ~~**Whether the respawn path works.**~~ **ANSWERED 2026-08-18: it works.**
+  `npm run stall-test` drives it: respawn fires after the configured silence and
+  the replacement worker pushes normally, with main-thread lag never exceeding
+  16ms throughout. Slow-push detection, reopen, the stall alarm and automatic
+  recovery are all exercised in the same run.
+- **Whether `terminate()` can interrupt a *real* wedged `node-hid` write.**
+  **STILL OPEN, and deliberately not claimed.** The diagnostic blocks the worker
+  with `Atomics.wait`, and `terminate()` did kill it (exit code 1) — but
+  `Atomics.wait` is a V8-level block and a stuck driver call is not. The
+  respawn's value does not depend on this: a fresh worker reopening the device
+  restores the panel whether or not the old thread ever dies, and the only cost
+  of a surviving orphan is one leaked thread. **A truly wedged endpoint may
+  still need a replug** — that caveat stays in `panel-proxy.js`.
+- **Whether the panel holds up on a genuinely busy machine.** The original
+  question behind the whole incident. `stall-test` proves the main thread
+  survives a blocked transport; it does not prove the *transport* keeps its
+  cadence when the PC is loaded with a Teams call and a build. Reproduce by
+  loading the CPU and watching `worstPush` and the heartbeat deltas — which is
+  now possible, because `worstPush` exists.
 - **Whether the live panel still looks right.** The daemon was verified this
   session by metrics again — 30 pushes, 0 failures, under the logon task — and
   the pane was verified through the real renderer as a JPEG. **Neither is eyes

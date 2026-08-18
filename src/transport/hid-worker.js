@@ -64,7 +64,31 @@ const SLOW_PUSH_MS = IDLE_TIMEOUT_MS;
  * is what cleared comparable states in the old main-thread code, and it costs a
  * frame or two. One slow push is a hiccup; three is a condition.
  */
-const SLOW_PUSH_LIMIT = 3;
+const SLOW_PUSH_LIMIT = Number(process.env.PERIPHERAL_SLOW_PUSH_LIMIT ?? 3);
+
+/* ── Fault injection, for `npm run stall-test` ────────────────────────────
+ * Off unless the env vars are set, and they never are in normal operation.
+ *
+ * This exists because the recovery paths in this file — slow-push detection,
+ * reopen, and the proxy's stall alarm and respawn — cannot be exercised on
+ * demand any other way. A wedged USB endpoint is not something you can
+ * reproduce by asking; the real one arrived once, unannounced, after a cold
+ * boot. Without this, every recovery branch would ship as code that had never
+ * executed, which is the "written but unverified" tier this project keeps
+ * having to admit to.
+ *
+ * `Atomics.wait` is the right primitive: it blocks the thread synchronously
+ * and uninterruptibly, which is precisely what node-hid's write() does when
+ * the driver stops draining. A setTimeout would prove nothing — it yields.
+ */
+const DEBUG_BLOCK_AFTER = Number(process.env.PERIPHERAL_DEBUG_BLOCK_AFTER ?? 0);
+const DEBUG_BLOCK_MS = Number(process.env.PERIPHERAL_DEBUG_BLOCK_MS ?? 0);
+const DEBUG_OPEN_HANG_MS = Number(process.env.PERIPHERAL_DEBUG_OPEN_HANG_MS ?? 0);
+
+/** Block this thread for real — the same shape as a stuck native call. */
+function blockThread(ms) {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
 
 const panel = new PanelTransport();
 
@@ -104,6 +128,7 @@ function reportStatus() {
 }
 
 async function openPanel() {
+  if (DEBUG_OPEN_HANG_MS) blockThread(DEBUG_OPEN_HANG_MS);
   const ok = await panel.open();
   if (ok) {
     post({ type: 'ready', info: panel.info ?? null });
@@ -145,6 +170,11 @@ async function pushTick() {
   const started = Date.now();
   try {
     const ok = await panel.push(frame);
+    /* Fault injection: stall INSIDE the push, exactly where a real one happens.
+     * One-shot (`===`, not `>=`) so a transient hiccup and a sustained wedge
+     * are separately expressible — duration is what distinguishes them, and a
+     * fault that repeats forever cannot show that recovery works. */
+    if (DEBUG_BLOCK_MS && pushed + 1 === DEBUG_BLOCK_AFTER) blockThread(DEBUG_BLOCK_MS);
     lastPushMs = Date.now() - started;
 
     if (ok) {

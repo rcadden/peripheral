@@ -19,7 +19,17 @@ is the answer. A personal-project client is blocked by Workspace policy; an
 in-org one is an internal app and is trusted by default. ICS is dead as a
 fallback and does not need building.
 
-Next: whatever Sprint 2 turns out to be. See the handoff.
+**Hardened 2026-08-18 after its first real overnight.** The first cold boot
+produced a total outage: `node-hid`'s `write()` is synchronous, so a USB
+endpoint that stopped draining pinned the daemon's only thread and the panel sat
+on its vendor logo while every health signal read `ok`. **The transport now runs
+on a worker thread and owns its own push cadence**, a stall reports as
+`panel=STALLED <n>s`, and `npm run stall-test` injects the fault so the recovery
+paths are exercised rather than assumed. The OAuth token also refreshed
+unattended overnight — the last genuinely unknown thing about Sprint 1.
+
+Next: **Sprint 2**. Nothing in it is started; two items want a conversation
+before code. See the handoff.
 
 <!-- Superseded 2026-08-17, kept per the no-tidying rule: -->
 <details><summary>Previous status (pre-OAuth)</summary>
@@ -34,7 +44,7 @@ the entire fetch path in one go.
 </details>
 
 > **Starting a session? Read
-> [`docs/plans/session-handoff-2026-08-17e.md`](docs/plans/session-handoff-2026-08-17e.md)
+> [`docs/plans/session-handoff-2026-08-18.md`](docs/plans/session-handoff-2026-08-18.md)
 > first.** It has the ordered next actions, what is verified and by what
 > method, and the open questions that need Ricky.
 
@@ -303,6 +313,50 @@ interchangeably. Nothing else in the build depends on which one we get.
 - Type scale is tuned for 6.86" read from ~3 feet, not for a desktop monitor.
 
 ## Lessons Learned
+- **2026-08-18 — A measurement is only valid for the state it was taken in, so
+  record the state alongside the number.** The 2026-08-17 lesson below correctly
+  demanded that a layout claim be re-measured in the page rather than trusted,
+  and recorded `.event`'s time column at **76.9px**. That number was real and
+  reproducible — **at 16px type.** The row ships at 24px, where the same string
+  is **114.42px**, and the `104px` column it was vouching for overflowed into
+  the title. `104px` is correct at 16px (76.28px) and at 20px (95.36px) and
+  wrong at 24px. So the previous session obeyed the rule, got a true number, and
+  still shipped the bug, because the number silently belonged to a different
+  type scale.
+  **Standing rule: a recorded measurement must carry the conditions that make
+  it meaningful — type size, font, viewport, data — or it is a number with no
+  claim attached.** And prefer deleting the constant to re-tuning it: the fix
+  here is `max-content` on the list plus `subgrid` on the rows, which cannot
+  fall behind a type change at all. A fixed px that must track another value is
+  a bug with a timer on it.
+  Corollary found while fixing it: **`max-content` on a row is not a column.**
+  Each `<li>` is its own grid, so it resolved per row (88.58px vs 114.42px) and
+  misaligned the list. Shared geometry needs shared grid — that is what subgrid
+  is for.
+- **2026-08-18 — A single sample cannot measure a spike, and the spike is
+  always the thing you care about.** The heartbeat reported `lastPush`. The
+  worker completed a **4012ms** push and then a **4ms** push before the main
+  thread got a turn, so `lastPush` read **4ms** and the only push that mattered
+  left no trace. Polling harder does not help: both reports land in the same
+  event-loop turn and the second overwrites the first before any timer runs.
+  **Standing rule: peaks must be recorded at the point every value is seen, not
+  sampled by an observer on its own clock — and a health metric should report
+  the worst value in the interval, not the last one.** The heartbeat now reports
+  `worstPush`, drained each interval. Found by `npm run stall-test`, not by
+  reading the code.
+- **2026-08-18 — If a recovery path cannot be triggered on demand, build the
+  trigger.** The worker-thread fix shipped with slow-push detection, reopen, the
+  stall alarm and the respawn all unexecuted, because a wedged USB endpoint
+  arrives unannounced and cannot be requested. That is how branches stay in the
+  "written but unverified" tier permanently. `npm run stall-test` injects the
+  fault with `Atomics.wait` — chosen because it blocks the thread synchronously
+  and uninterruptibly, the exact shape of a stuck native call, where a
+  `setTimeout` would prove nothing precisely because it yields.
+  **Standing rule: fault injection belongs in the product, guarded by env, not
+  in a test fixture** — it is the only way the real recovery code gets exercised,
+  and it immediately paid for itself by exposing the `lastPush` defect above.
+  This is the same rule as `npm run idle-test`, generalised from "behaviour we
+  can't explain" to "behaviour we can't reproduce".
 - **2026-08-18 — Two loops on one thread are one loop, and a synchronous native
   call is what proves it.** The daemon's central design is a push loop that
   "can never be blocked by anything," documented at length at the top of
