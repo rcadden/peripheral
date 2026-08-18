@@ -852,6 +852,20 @@ before the fix existed and is left as-is.
   restores the panel whether or not the old thread ever dies, and the only cost
   of a surviving orphan is one leaked thread. **A truly wedged endpoint may
   still need a replug** — that caveat stays in `panel-proxy.js`.
+- **Why a push occasionally takes ~2 seconds.** Observed within the first hour
+  of `worstPush` existing (2026-08-18, 08:33 heartbeat: `worstPush=2013ms`, on
+  an otherwise idle machine, `loopLag=0ms`, no failures). Typical intervals read
+  200–630ms. **This is inside the ~3s forget window, so nothing flickered and
+  the slow-push detector did not fire** — but it is two-thirds of the way to the
+  panel dropping the frame, and it was invisible before today: `lastPush` would
+  have reported whichever fast push happened to land last.
+  Not diagnosed. Candidates, in no order: USB scheduling, the 81 sequential
+  512-byte writes contending with something else on the bus, or the host briefly
+  busy. **Do not tune `SLOW_PUSH_MS` down to "catch" it without knowing the
+  cause** — the threshold is deliberately the panel's own forget window, and
+  lowering it would trade a real signal for noise. Watch whether the figure
+  drifts upward over days; that pattern, not a single sample, is what would
+  indicate the cable degrading.
 - **Whether the panel holds up on a genuinely busy machine.** The original
   question behind the whole incident. `stall-test` proves the main thread
   survives a blocked transport; it does not prove the *transport* keeps its
