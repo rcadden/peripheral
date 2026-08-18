@@ -41,6 +41,8 @@
   </footer>
 
 </main>
-<script src="./agenda.js"></script>
+<!-- type=module: agenda.js imports the hero logic from focus.js so that test/
+     can reach it. Both are served over http, so ESM resolves fine. -->
+<script type="module" src="./agenda.js"></script>
 </body>
 </html>

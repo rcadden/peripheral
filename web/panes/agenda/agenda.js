@@ -6,7 +6,12 @@
  * countdown actually ticks and the design can be judged at true size.
  *
  * Every value rendered here is display-only. No writes, ever.
+ *
+ * The hero pick lives in focus.js, NOT here — it is the one decision worth
+ * testing and it has to be reachable from test/. See the history in that file.
  */
+
+import { selectAgenda } from './focus.js';
 
 const POLL_MS = 60_000; // state refresh
 const TICK_MS = 1_000;  // countdown repaint
@@ -140,13 +145,6 @@ async function loadState() {
 
 /* ── render ─────────────────────────────────────────────────────────────── */
 
-function classify(ev, now) {
-  const s = new Date(ev.start), e = new Date(ev.end);
-  if (e <= now) return 'past';
-  if (s <= now && now < e) return 'now';
-  return 'future';
-}
-
 function render() {
   const now = new Date();
   el.clock.textContent = fmtClock(now);
@@ -154,34 +152,8 @@ function render() {
 
   if (!state?.events?.length) return renderEmpty(now);
 
-  const events = [...state.events].sort((a, b) => new Date(a.start) - new Date(b.start));
-
-  /* ALL-DAY EVENTS ARE NOT CANDIDATES FOR THE HERO.
-   *
-   * An all-day event spans local midnight to local midnight, so classify()
-   * calls it 'now' for the entire day — and since 'now' wins the focus slot,
-   * a single US Holidays entry would sit in the hero from midnight to midnight
-   * and hide every actual meeting. That is the North Star failing outright:
-   * you would still have to open Google Calendar to find out what's next.
-   *
-   * This did not show up on mock data, which has no all-day events. It became
-   * live the moment the real calendar list was discovered, because the account
-   * carries a holidays calendar. So: all-day events are context, listed but
-   * never focused, and never on the countdown or the progress bar. */
-  const allDay = events.filter((e) => e.allDay);
-  const timed = events.filter((e) => !e.allDay).map((ev) => ({ ...ev, phase: classify(ev, now) }));
-
-  /* "Up next" = happening now if anything is, else the soonest future event.
-   *
-   * Among concurrent events the one ENDING SOONEST wins, not the one that
-   * started first. Seen on the first real day of data: at 2:20pm a 1–3pm block
-   * and a 2:00–2:30 meeting were both live, and start-order handed the hero to
-   * the long block — so the panel showed the thing with 40 minutes left rather
-   * than the thing he had to leave in 10. Ending-soonest is the one with a
-   * deadline attached, which is the only one worth a countdown. */
-  const live = timed.filter((e) => e.phase === 'now')
-    .sort((a, b) => new Date(a.end) - new Date(b.end));
-  const focus = live[0] || timed.find((e) => e.phase === 'future');
+  // Sorting, the all-day split, phasing and the hero pick all live in focus.js.
+  const { allDay, timed, focus } = selectAgenda(state.events, now);
 
   renderHero(focus, timed, allDay, now);
   renderList(timed, allDay, focus, now);
