@@ -28,9 +28,15 @@ on a worker thread and owns its own push cadence**, a stall reports as
 paths are exercised rather than assumed. The OAuth token also refreshed
 unattended overnight — the last genuinely unknown thing about Sprint 1.
 
-Next: **Sprint 2 — Agenda, second pass**, which opens now for real. It had been
-nominally "current" for a day with zero completed items, because every session
-since Sprint 1 closed was spent hardening Sprint 1 rather than starting Sprint 2.
+**Sprint 2's build item shipped 2026-08-18** — the "and then what?" middle
+column, iterated three rounds against live feedback the same session
+(equal-thirds layout, "Happening"/time-remaining on the hero, free-time vs.
+back-to-back on the then-column, tighter agenda-list time format). Confirmed
+on the glass: *"panel looks great for now."* Along the way, found and fixed
+that the daemon never reloaded edited pane code on its own — it now
+watches `web/` and reloads automatically. Remaining in Sprint 2: two
+`NEEDS RICKY` decisions (the accent blue/type scale revisit, and overlap
+precedence beyond duration) and one design item (colour-code by calendar).
 
 **The roadmap was renumbered 2026-08-18** — Sprint 2 bundled agenda polish with
 a multi-pane system and is now split into Sprints 2, 3 and 4; the release sprint
@@ -51,7 +57,7 @@ the entire fetch path in one go.
 </details>
 
 > **Starting a session? Read
-> [`docs/plans/session-handoff-2026-08-18b.md`](docs/plans/session-handoff-2026-08-18b.md)
+> [`docs/plans/session-handoff-2026-08-18c.md`](docs/plans/session-handoff-2026-08-18c.md)
 > first.** It has the ordered next actions, what is verified and by what
 > method, and the open questions that need Ricky.
 
@@ -320,6 +326,69 @@ interchangeably. Nothing else in the build depends on which one we get.
 - Type scale is tuned for 6.86" read from ~3 feet, not for a desktop monitor.
 
 ## Lessons Learned
+- **2026-08-18 — A daemon that screenshots its own localhost page still needs
+  telling to look at disk again.** The one structural decision this project
+  keeps citing — "the daemon screenshots its own localhost URL" — has an
+  unstated corollary: `renderer.open()` navigates the Playwright page exactly
+  once, and nothing about editing `agenda.js`/`.css`/`.html` on disk touches
+  an already-open page. Ricky reported "I don't see it on the live panel"
+  after a real feature shipped; the daemon had been running since before the
+  edit, so the physical panel kept screenshotting the DOM it loaded at boot.
+  **Standing rule: an already-running renderer does not re-read source files
+  on its own — something has to tell it to.** Fixed with a debounced
+  `fs.watch` on `web/` in `daemon.js` that calls the (previously unused,
+  built-for-pane-cycling) `renderer.goto()` on any pane-file change, rather
+  than restarting the whole daemon — a full restart also bounces the HID
+  device, which is not something to do reflexively on every CSS tweak. Code
+  outside `web/` (`daemon.js`, `render.js`, etc.) still needs a real process
+  restart; the watcher only covers pane files.
+  **Corollary, same day: an async side-effect handler that can lose a race
+  must retry, not drop.** The reload landed once exactly while a capture was
+  in flight, logged `pane reload skipped`, and never tried again — the daemon
+  kept serving stale code silently, distinguishable from a healthy reload
+  only by a repeating `pageerror` line that reads like ordinary noise.
+  Watchers, retries, and anything else triggered by an external event (a file
+  change, a signal) should assume the event can land on a busy moment and
+  retry on a short timer rather than silently accept the first outcome.
+- **2026-08-18 — A layout dimension change invalidates every text-fit
+  threshold downstream of it, and it will be missed if only the new layout is
+  eyeballed.** The hero column's width changed three times in one session
+  (722px → 516px → 387px, chasing first a new middle column, then "equal
+  thirds" on request), and each time broke the countdown's length-based font
+  breakpoints, because they encode *pixel widths measured at a specific
+  column width*, not a proportional rule. The third narrowing needed a size
+  tier (`len-xl`, later `len-xxl`) beyond anything the first two required —
+  a two-tier ladder that was "clearly enough" at 516px was provably not
+  enough at 387px.
+  **Standing rule: when a container's width changes, re-measure every
+  content-length-based sizing decision inside it, in the live page, against
+  the new width — do not assume a previous tuning pass generalizes.** This is
+  the same shape as the 2026-08-17 time-column lesson below, recurring at the
+  level of an entire breakpoint ladder instead of one constant.
+  **A sub-case of this bit twice in the same session and is worth naming on
+  its own: a padded element's fitting budget is `container width − padding`,
+  not `container width`.** `remainingSizeClass()` initially sized text against
+  the hero's full 387px column, but the "happening now" badge it renders into
+  carries its own 16px-per-side padding — a budget the sizing function had no
+  way to know about. "26 MIN LEFT" measured 419px total against a 387px
+  column before this was caught by the same in-page overflow measurement used
+  everywhere else this session. **Any size-fitting function needs the actual
+  rendering budget passed in, not the outer container's width by default.**
+- **2026-08-18 — A feature request evaluated against one calendar shape can
+  be wrong against another, and the fix is to check with the person, not to
+  guess harder.** The "and then what?" column's first design always led with
+  the next meeting's own length and title. It read fine against the shape
+  used to build and check it. Live, mid-meeting, it produced "Up Next:
+  Ricky / Nick 1:1" while Ricky actually had a 30-minute break in front of
+  that meeting — the more useful fact (there's a gap) was buried under a fact
+  that was true but not what mattered. He caught it immediately because he
+  was looking at the real thing while it was wrong, not because the design
+  was reviewed harder before shipping.
+  **Standing rule already in this file, reconfirmed: only eyes on the actual
+  glass close a UI decision, and a browser-DOM check against live data — no
+  matter how careful — answers "does it render correctly", never "is this the
+  right thing to show."** Both questions matter and neither substitutes for
+  the other.
 - **2026-08-18 — A measurement is only valid for the state it was taken in, so
   record the state alongside the number.** The 2026-08-17 lesson below correctly
   demanded that a layout claim be re-measured in the page rather than trusted,

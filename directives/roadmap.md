@@ -47,6 +47,11 @@ sprint gates they only made a sprint look stalled.
   corruption, 2026-08-18 endpoint stall), both consistent with the cable rather
   than the unit. **If a third arrives, replace the cable before concluding
   anything about the panel.** Dated log at the bottom of `CHANGELOG.md`.
+  **2026-08-18, later the same day: arguably the third arrived** — 5+ more
+  stalls during this session, one push at 6603ms (over 2x the previous worst).
+  **Ricky does not think it's the cable** — asked directly what he suspects
+  instead; no answer yet. Recorded as open, not resolved either direction. Do
+  not swap the cable or otherwise act on the cable theory without his sign-off.
 - **Cadence on a genuinely busy machine.** `npm run stall-test` proves the main
   thread survives a blocked transport; it does not prove the transport keeps 1
   fps while a Teams call and a build are running. Watch `worstPush` and the
@@ -157,15 +162,90 @@ real data on the real panel, 2026-08-17 and 2026-08-18.
 **Three of these need Ricky before any code.** They are tagged `NEEDS RICKY` so
 a session does not pick one up and stall halfway.
 
-- [ ] **Third pane: "and then what?"** — keep the current left/right split
-      (now on the left, today's schedule on the right) and add a middle column
-      for the event *after* the one in the hero. The question it answers is
-      specific: *do I just need to get through this meeting, or is there
-      another one immediately behind it?* That changes whether you can run to
-      the kitchen, and it is currently invisible — the right-hand list shows
-      the next event but not how much room there is before it.
-      Open: what the middle pane shows when the gap is hours, or when nothing
-      follows. "Clear until 4pm" is probably more useful than an empty column.
+- [x] **Third pane: "and then what?"** — **BUILT 2026-08-18.** A middle
+      column now sits between the hero and the agenda list (`.then` in
+      `web/panes/agenda/`), originally answering the gap after the hero
+      event ends: `{duration} FREE` when there's room, `RIGHT AFTER` when the
+      next event starts within ~2 minutes of the hero ending, `OVERLAP` when
+      it starts before the hero even ends. Logic (`pickNext`) lives in
+      `focus.js` alongside the hero pick, tested in `focus.test.js`.
+      **SUPERSEDED by Follow-up #3 below, same day** — the column's whole
+      shape changed (only shows while the hero is live; headline is now
+      "30 MIN / Free time" or the next meeting itself, not this wording).
+      Text kept per the no-tidying rule; the current behavior is in
+      Follow-up #3.
+      **The `OVERLAP` case was found by real data within the hour of
+      shipping, not designed for** — the first live render showed the "next"
+      event starting at the SAME time as the hero (a personal commitment
+      layered under a work meeting), which the initial "RIGHT AFTER" wording
+      described as sequential when it was concurrent. Fixed by widening the
+      gap check to a signed range instead of one threshold.
+      **Narrowing the hero column to fit the new middle column broke the
+      countdown's length-based font breakpoints** (`len-md`/`len-lg` in
+      agenda.css), tuned for the old 722px hero width. Re-measured against the
+      real 516px width in the live page (not estimated) and moved the
+      thresholds down — see the comment above `el.countdown.className` in
+      `agenda.js`. This is the same class of bug the 2026-08-17 time-column
+      lesson describes: a size-dependent constant is only valid for the size
+      it was measured at.
+      Verified against real live calendar data (not mock) via in-page DOM
+      measurement for horizontal/vertical overflow at all three columns — no
+      overflow found. **Verified on the physical panel 2026-08-18** — Ricky
+      confirmed on the glass after Follow-up #3 landed: "panel looks great
+      for now."
+      **Follow-up same day: the daemon doesn't reload edited pane code.**
+      Ricky reported not seeing the new column on the real panel. Root cause:
+      `render.js`'s Playwright page navigates once at daemon startup and
+      never again outside of pane-cycling's unused `goto()` — editing
+      agenda.js/css/html on disk does nothing to an already-running daemon.
+      Fixed in `daemon.js`: a debounced `fs.watch` on `web/` now calls
+      `renderer.goto()` (not a full process restart — that would also
+      reopen the HID device, unwise while the transport is fighting the
+      cable, see Standing watch below) whenever a pane file changes. Confirmed
+      working: a CSS edit during this same session triggered
+      `[daemon] pane reloaded` in the log with no manual restart.
+      **Follow-up #2: equal thirds.** Ricky asked for the three columns equal
+      width rather than the original 516/224/420px split. Changed `.body` to
+      `grid-template-columns: 1fr 1fr 1fr`. This shrank the hero column to
+      ~387px, which broke the just-fixed countdown breakpoints a second time
+      and this time the existing three-tier ladder (106/80/60px) wasn't
+      enough — "IN 9 HR 59 MIN" still overflowed at the smallest tier (60px,
+      492px wide against 387px available). Added a fourth tier, `len-xl`
+      (44px). Re-measured every length `fmtCountdown()` can actually produce
+      (3, 7, 8, 9, 13, 14 chars — never anything else) against the real
+      387px column; all fit with margin. Third time this exact bug shape has
+      hit this file — a hero-width change breaks font breakpoints — worth
+      remembering if the hero column moves again.
+      **Follow-up #3, same day: three more requests from actually living
+      with it.** (1) The hero eyebrow now reads "Happening" with time
+      REMAINING (`fmtRemaining()`) while its event is live, "Up next" with
+      time until otherwise — "NOW" told Ricky nothing once he was already in
+      the meeting. (2) The then-column only populates while the hero is live
+      (blank the two hours before his first meeting), and its headline
+      distinguishes a real gap from back-to-back: `30 MIN` / `Free time` /
+      `Then · <next title> · <time>` when there's room, or the next
+      meeting's own length/title/meta when there isn't
+      (`BACK_TO_BACK_MS = 2min`). The first cut of this always led with the
+      next meeting regardless of gap, which Ricky caught immediately —
+      showing "Ricky / Nick 1:1" as "Up Next" while he had 30 free minutes in
+      front of it buried the more useful fact. (3) The agenda list's time
+      column dropped to `10:00a` from `10:00 AM` — same `max-content` +
+      subgrid column, no CSS change needed, just less content per row.
+      **The is-now badge overflowed too, found by the same in-page
+      measurement discipline**: `remainingSizeClass()`'s output sits inside
+      `.countdown.is-now`, which carries its own 16px-per-side padding — a
+      budget the plain `countdownSizeClass()` thresholds don't know about.
+      "26 MIN LEFT" measured 419px total against a 387px column before this
+      was caught. `remainingSizeClass()` is now a separate, smaller scale
+      (down to a new `len-xxl` at 34px), measured against the padded budget
+      (355px), because `fmtRemaining()`'s longest strings ("9 HR 59 MIN
+      LEFT") don't fit even at the plain countdown's smallest tier.
+      **The reload watcher lost a race with itself during this same round of
+      edits** — a reload landed exactly when a capture was mid-flight, was
+      logged as "skipped" with no retry, and the daemon kept running stale
+      code silently until manually re-touched. Hardened same day:
+      `reloadPaneWithRetry()` in `daemon.js` retries every 200ms (up to 6
+      times) instead of dropping the reload on the first collision.
 - [~] **Overlap precedence — needs real rules, not a clean shift.**
       **`NEEDS RICKY`** — the roadmap has said "wants a conversation before
       code" since it was written, and that has not happened yet.

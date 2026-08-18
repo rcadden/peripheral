@@ -19,9 +19,14 @@ const TICK_MS = 1_000;  // countdown repaint
 const el = {
   clock: document.getElementById('clock'),
   badge: document.getElementById('badge'),
+  heroEyebrow: document.getElementById('heroEyebrow'),
   countdown: document.getElementById('countdown'),
   title: document.getElementById('title'),
   meta: document.getElementById('meta'),
+  thenEyebrow: document.getElementById('thenEyebrow'),
+  thenCountdown: document.getElementById('thenCountdown'),
+  thenTitle: document.getElementById('thenTitle'),
+  thenMeta: document.getElementById('thenMeta'),
   events: document.getElementById('events'),
   progress: document.getElementById('progress'),
 };
@@ -48,12 +53,15 @@ function fmtTime(d) {
 }
 
 // Short form for the agenda column, where horizontal space is tight.
+// "10:00a" not "10:00 AM" (Ricky, 2026-08-18) — no space, single lowercase
+// letter for the meridiem. The column is `max-content` (see agenda.css), so
+// every character shaved here hands width straight back to the title.
 function fmtTimeShort(d) {
   let h = d.getHours();
   const m = String(d.getMinutes()).padStart(2, '0');
-  const ap = h < 12 ? 'AM' : 'PM';
+  const ap = h < 12 ? 'a' : 'p';
   h = h % 12 || 12;
-  return `${h}:${m} ${ap}`;
+  return `${h}:${m}${ap}`;
 }
 
 /* Countdown wording. Deliberately coarse: at a glance from three feet you
@@ -68,6 +76,58 @@ function fmtCountdown(ms) {
   const min = totalMin % 60;
   if (hr >= 10 || min === 0) return `IN ${hr} HR`;
   return `IN ${hr} HR ${min} MIN`;
+}
+
+// Same coarseness as fmtCountdown, without the "IN"/"NOW" framing — this one
+// answers "how long", not "how soon". Used for the length of the meeting
+// coming up next, in the "then" column.
+function fmtDuration(ms) {
+  const totalMin = Math.max(0, Math.floor(ms / 60_000));
+  if (totalMin < 60) return `${totalMin} MIN`;
+  const hr = Math.floor(totalMin / 60);
+  const min = totalMin % 60;
+  if (hr >= 10 || min === 0) return `${hr} HR`;
+  return `${hr} HR ${min} MIN`;
+}
+
+// The hero's countdown when the hero IS the thing happening — time
+// remaining, not time until. Ricky, 2026-08-18: "NOW" was accurate but told
+// you nothing; the number that matters here is how much runway is left.
+function fmtRemaining(ms) {
+  if (ms <= 0) return 'ENDING';
+  const totalMin = Math.floor(ms / 60_000);
+  if (totalMin < 1) return `${Math.floor(ms / 1000)} SEC LEFT`;
+  if (totalMin < 60) return `${totalMin} MIN LEFT`;
+  const hr = Math.floor(totalMin / 60);
+  const min = totalMin % 60;
+  if (hr >= 10 || min === 0) return `${hr} HR LEFT`;
+  return `${hr} HR ${min} MIN LEFT`;
+}
+
+// Shared by both the hero and "then" countdowns — they are the same column
+// width now (equal thirds), the same font, so the same breakpoints apply.
+// See the dated history in agenda.css for why these exact numbers: they are
+// measured against the real 387px column, not estimated, and the three
+// tiers below 106px exist because two were not enough for the longest
+// strings either format can produce.
+function countdownSizeClass(text) {
+  return text.length > 12 ? 'len-xl' : text.length > 8 ? 'len-lg' : text.length > 3 ? 'len-md' : '';
+}
+
+// The "happening now" countdown lives inside the is-now badge, which carries
+// its own padding (16px each side — see .countdown.is-now in agenda.css), so
+// it has 32px less room than the plain countdown does. Found 2026-08-18:
+// "26 MIN LEFT" at the len-lg tier (the size countdownSizeClass() picked for
+// an 11-char string) measured 419px total against a 387px hero column,
+// because the size was chosen for the text alone with no padding budgeted.
+// fmtRemaining's longest strings ("9 HR 59 MIN LEFT") don't fit even at the
+// plain countdown's smallest tier, so this is its own scale rather than a
+// reuse — measured against the real padded budget (355px = 387 − 32).
+function remainingSizeClass(text) {
+  if (text.length > 14) return 'len-xxl';
+  if (text.length > 9) return 'len-xl';
+  if (text.length > 6) return 'len-lg';
+  return 'len-md';
 }
 
 /* ── mock data (browser-only fallback) ──────────────────────────────────── */
@@ -152,24 +212,38 @@ function render() {
 
   if (!state?.events?.length) return renderEmpty(now);
 
-  // Sorting, the all-day split, phasing and the hero pick all live in focus.js.
-  const { allDay, timed, focus } = selectAgenda(state.events, now);
+  // Sorting, the all-day split, phasing, the hero pick and the "next after
+  // the hero" pick all live in focus.js.
+  const { allDay, timed, focus, next } = selectAgenda(state.events, now);
 
   renderHero(focus, timed, allDay, now);
+  renderThen(focus, next);
   renderList(timed, allDay, focus, now);
   renderProgress(focus, timed, now);
 }
 
 function renderEmpty(now) {
+  el.heroEyebrow.textContent = 'Up next';
   el.countdown.textContent = 'CLEAR';
   el.countdown.className = 'countdown';
   el.title.textContent = 'Nothing scheduled';
   el.meta.textContent = '';
+  blankThen();
   el.events.innerHTML = '<li class="empty">No events</li>';
   el.progress.style.width = '0%';
 }
 
+function blankThen() {
+  el.thenEyebrow.textContent = '';
+  el.thenCountdown.textContent = '';
+  el.thenCountdown.className = 'countdown';
+  el.thenTitle.textContent = '';
+  el.thenMeta.textContent = '';
+}
+
 function renderHero(focus, marked, allDay, now) {
+  el.heroEyebrow.textContent = 'Up next';
+
   if (!focus) {
     // No timed events left, but an all-day entry is still worth naming — it is
     // usually the reason the day is otherwise empty.
@@ -188,32 +262,95 @@ function renderHero(focus, marked, allDay, now) {
     return;
   }
 
-  const start = new Date(focus.start);
-  const end = new Date(focus.end);
   const isNow = focus.phase === 'now';
-  const text = isNow ? 'NOW' : fmtCountdown(start - now);
+  // Ricky, 2026-08-18: "Up next" was only ever accurate before the first
+  // meeting of the day. While the hero IS the thing happening, say so, and
+  // show time remaining rather than the now-meaningless "NOW".
+  el.heroEyebrow.textContent = isNow ? 'Happening' : 'Up next';
+  const text = isNow
+    ? fmtRemaining(new Date(focus.end) - now)
+    : fmtCountdown(new Date(focus.start) - now);
 
   el.countdown.textContent = text;
-  el.countdown.className = 'countdown'
-    + (text.length > 13 ? ' len-lg' : text.length > 9 ? ' len-md' : '')
-    + (isNow ? ' is-now' : '');
+  el.countdown.className = ['countdown', isNow ? remainingSizeClass(text) : countdownSizeClass(text), isNow ? 'is-now' : '']
+    .filter(Boolean).join(' ');
 
   el.title.textContent = focus.title;
+  el.meta.innerHTML = buildMetaHtml(focus);
+}
 
-  const cal = CALENDARS[focus.calendar] || { label: focus.calendar, tint: 'var(--text-dim)' };
+// Below this, the gap before "next" isn't a real break — showing the
+// meeting itself is more useful than "1 MIN FREE".
+const BACK_TO_BACK_MS = 2 * 60_000;
+
+/**
+ * The middle column: what's next AFTER the meeting you're currently in.
+ * Ricky, 2026-08-18: only meaningful while the hero is a live meeting — the
+ * two hours before his first meeting had nothing to be "after" — and should
+ * read as a second hero (same countdown/title/meta styling), not a
+ * secondary note.
+ *
+ * Two shapes, chosen by whether there's an actual gap before "next":
+ *   - a real break: the headline is the LENGTH OF THE BREAK ("30 MIN" /
+ *     "Free time"), not the next meeting — found same day, live, the first
+ *     version always led with the next meeting even with 30 minutes of
+ *     open time in front of it, which is the more important fact.
+ *   - back-to-back: nothing to name as free, so the headline is the next
+ *     meeting itself — its length and title.
+ */
+function renderThen(focus, next) {
+  if (!focus || focus.phase !== 'now') return blankThen();
+
+  el.thenEyebrow.textContent = 'Up next';
+
+  if (!next) {
+    el.thenCountdown.textContent = 'CLEAR';
+    el.thenCountdown.className = 'countdown';
+    el.thenTitle.textContent = 'Nothing else today';
+    el.thenMeta.textContent = '';
+    return;
+  }
+
+  const gapMs = new Date(next.start) - new Date(focus.end);
+
+  if (gapMs > BACK_TO_BACK_MS) {
+    const text = fmtDuration(gapMs);
+    el.thenCountdown.textContent = text;
+    el.thenCountdown.className = ['countdown', countdownSizeClass(text)].filter(Boolean).join(' ');
+    el.thenTitle.textContent = 'Free time';
+    el.thenMeta.innerHTML = `<span>Then</span><span class="sep">·</span>`
+      + `<span>${esc(next.title)}</span><span class="sep">·</span>`
+      + `<span>${esc(fmtTime(new Date(next.start)))}</span>`;
+    return;
+  }
+
+  const text = fmtDuration(new Date(next.end) - new Date(next.start));
+  el.thenCountdown.textContent = text;
+  el.thenCountdown.className = ['countdown', countdownSizeClass(text)].filter(Boolean).join(' ');
+
+  el.thenTitle.textContent = next.title;
+  el.thenMeta.innerHTML = buildMetaHtml(next);
+}
+
+/** The meta line under a title: calendar dot + label, time range, conference,
+ * location, attendee count. Shared by the hero and the "then" column — same
+ * event shape, same line. */
+function buildMetaHtml(ev) {
+  const start = new Date(ev.start);
+  const end = new Date(ev.end);
+  const cal = CALENDARS[ev.calendar] || { label: ev.calendar, tint: 'var(--text-dim)' };
   const bits = [`${fmtTime(start)} – ${fmtTime(end)}`];
-  // The normaliser now detects Zoom and Teams too, not just Meet.
+  // The normaliser detects Meet, Zoom and Teams.
   const CONF = { meet: 'Meet', zoom: 'Zoom', teams: 'Teams' };
-  if (CONF[focus.conference]) bits.push(CONF[focus.conference]);
+  if (CONF[ev.conference]) bits.push(CONF[ev.conference]);
   // A conference link pasted into the location field is already reported as
   // the conference; repeating the raw URL would eat the whole meta line.
-  if (focus.location && !/^https?:\/\//i.test(focus.location)) {
-    bits.push(shortLocation(focus.location));
+  if (ev.location && !/^https?:\/\//i.test(ev.location)) {
+    bits.push(shortLocation(ev.location));
   }
-  if (focus.attendeeCount) bits.push(`${focus.attendeeCount} people`);
+  if (ev.attendeeCount) bits.push(`${ev.attendeeCount} people`);
 
-  el.meta.innerHTML =
-    `<span class="cal-dot" style="background:${cal.tint}"></span>`
+  return `<span class="cal-dot" style="background:${cal.tint}"></span>`
     + `<span>${cal.label}</span><span class="sep">·</span>`
     + bits.map(esc).join('<span class="sep">·</span>');
 }

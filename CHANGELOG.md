@@ -938,6 +938,153 @@ before the fix existed and is left as-is.
   the protocol reference, not guessed — the panel has a 19% one-star failure rate
   and fuzzing it is how it becomes a paperweight.
 
+### Added — the "and then what?" third pane, Sprint 2's build item (2026-08-18)
+
+- **`.then` column** now sits between the hero and the agenda list —
+  `web/panes/agenda/index.html`, `agenda.css`, `agenda.js`. Sprint 2's only
+  fully-specified, unblocked build item at session start.
+- **`pickNext(timed, focus)`, new in `focus.js`** — the event chronologically
+  after the hero, walking forward from the hero's position in the
+  already-sorted array so an earlier-starting event that merely overlaps the
+  hero (already accounted for by the shortest-duration hero rule) is never
+  reported as "next". `selectAgenda()` now returns `next` alongside `focus`.
+  4 new tests in `focus.test.js`, including the exact overlap shape from the
+  shortest-duration hero case. **73 pass, 0 fail** (was 69).
+- **First cut's wording (`{duration} FREE` / `RIGHT AFTER` / `OVERLAP`) is
+  SUPERSEDED the same session** by the redesign below, driven by three rounds
+  of Ricky actually living with it. Kept per the no-tidying rule; see
+  `directives/roadmap.md` Sprint 2 for the full sequence.
+- **Verified against real live calendar data** (not mock) via in-page DOM
+  measurement for horizontal/vertical overflow, immediately — and immediately
+  useful: the first live render exposed a case the mock never had (see next
+  entry).
+
+### Fixed — the daemon never reloaded edited pane code (2026-08-18)
+
+- **Root cause, found because Ricky reported "I don't see it on the live
+  panel" after the above shipped.** `src/render.js`'s Playwright page
+  navigates once at `renderer.open()`, and nothing after that tells it to
+  look at disk again — `goto()` existed only for future pane-cycling and was
+  never called. The daemon process had been running since before the edit,
+  so the physical panel kept screenshotting the DOM it loaded at boot while
+  the code on disk had already changed. Confirmed by process start time
+  (08:33:39) predating every edit this session.
+- **Fixed in `src/daemon.js`: `watchPaneSource()`**, a debounced
+  `fs.watch(WEB_DIR, { recursive: true })` that calls `reloadPane()` →
+  `renderer.goto(paneUrl)` on any change under `web/`. Deliberately **not** a
+  full process restart — that would also close and reopen the HID device,
+  which is unwise to do reflexively on every CSS tweak while the transport is
+  independently having a rough day (see Failure log below). Confirmed working
+  same session: a CSS-only edit produced `[daemon] pane reloaded` in the log
+  with no manual restart.
+- **The watcher lost a race with itself on its first real workout.** Editing
+  html/css/js as separate saves a few seconds apart (normal for a multi-file
+  change) fired multiple reload attempts, and one landed exactly while a
+  capture was in flight. The original code logged `pane reload skipped` and
+  dropped it — no retry — so the daemon kept serving stale code silently
+  until manually re-touched. The page doesn't crash on this; it just throws
+  in `pageerror` every render tick forever (`[render] pane threw: Cannot set
+  properties of undefined`), which looks like ordinary noise in the log
+  rather than "the reload never actually happened."
+  - **Hardened same session: `reloadPaneWithRetry()`**, retrying every 200ms
+    up to 6 times instead of dropping on the first collision. Debounce also
+    widened 400ms → 800ms to make a multi-file edit more likely to land in
+    one reload instead of three — this reduces but does not eliminate the
+    race, since saves are never atomic as a set. Documented inline: if
+    `pane threw` repeats after an edit, touch any file in `web/` again.
+- **A code-side change to `daemon.js` itself still needs a real process
+  restart** — the watcher only reloads pane files (`web/`). This happened
+  three times this session (the watcher's own introduction, the debounce
+  widen, and the retry hardening), each verified clean via
+  `npm run startup:logs` afterward.
+
+### Changed — the hero and "then" columns redesigned from living with it (2026-08-18)
+
+Three rounds of real feedback, same session, each one landing before the
+previous round's font-size math had even settled:
+
+- **Equal thirds.** Ricky: the middle column read too thin against the other
+  two. `.body` changed from `1fr 224px 420px` to `1fr 1fr 1fr`, shrinking the
+  hero to ~387px (from 516px, itself already down from the original 722px).
+  This is the **third time in one session** a hero-width change broke the
+  countdown's length-based font breakpoints, and this time the existing
+  three-tier ladder (106/80/60px) wasn't enough on its own — `fmtCountdown`'s
+  longest strings ("IN 9 HR 59 MIN") overflowed even at the smallest tier
+  (492px against 387px available). Added a fourth tier, `len-xl` (44px), and
+  re-measured every length `fmtCountdown()` can actually produce (3, 7, 8, 9,
+  13, 14 chars — never anything else) against the real 387px column in a live
+  browser, not estimated.
+- **"Happening" vs "Up next", and time remaining vs "NOW".** Ricky: this
+  morning he logged in two hours before any meeting, when "Up next" was
+  accurate — but it stays "Up next" even while a meeting is live, when the
+  useful fact is how much time is *left*, not that a static word says "NOW".
+  Hero eyebrow now reads **"Happening"** with `fmtRemaining(end − now)`
+  while the hero is live, **"Up next"** with `fmtCountdown(start − now)`
+  otherwise.
+  - **The `is-now` badge overflowed the hero column**, found by the same
+    in-page measurement discipline used throughout this session:
+    `remainingSizeClass()`'s chosen size didn't account for the badge's own
+    16px-per-side padding (`.countdown.is-now`) — a budget the plain
+    countdown thresholds don't carry. "26 MIN LEFT" measured 419px total
+    against a 387px column before this was caught. Fixed with a dedicated,
+    smaller scale (`remainingSizeClass()`, down to a new `len-xxl` at 34px)
+    measured against the padded budget (355px), because `fmtRemaining()`'s
+    longest strings ("9 HR 59 MIN LEFT") don't fit even at the plain
+    countdown's smallest tier.
+- **The then-column now gates on the hero being live, and distinguishes a
+  real gap from back-to-back.** Ricky: the two hours before his first
+  meeting had nothing to be "after", so the column should be blank then, not
+  showing gap math against nothing. Separately, mid-session, live: "I'm in a
+  meeting with Brittany, then a 30 minute break before Nick — but it's
+  showing Nick as 'Up Next'" — the first cut of the redesign always led with
+  the next meeting regardless of gap size, burying the more useful fact that
+  there was a break at all.
+  - Now: blank unless `focus.phase === 'now'`. When there's a real gap
+    (`> BACK_TO_BACK_MS`, 2 minutes): headline is the length of the break
+    (`30 MIN`), title is `Free time`, meta names what's next and when
+    (`Then · Ricky / Nick 1:1 · 12:00 PM`). When back-to-back or overlapping:
+    headline is the next meeting's own length, title and meta are the
+    meeting itself — same layout the hero uses (`buildMetaHtml()` is now
+    shared between both).
+  - **Reuses the hero's exact typography rather than a parallel scale**,
+    deliberately: the then-column is the same width as the hero now (equal
+    thirds), so `.countdown`/`.title`/`.meta` apply verbatim. One scale to
+    keep in sync instead of two.
+- **Agenda list times shortened**: `10:00 AM` → `10:00a` (Ricky: the list
+  was cramped and truncating more since the columns narrowed). No CSS
+  change needed — the time column is `max-content` via subgrid (see the
+  2026-08-18 time-column fix above), so it just shrank and handed the
+  freed width to titles.
+- **Verification for this whole round**: every claim above checked via a
+  live browser against the exact URL the daemon screenshots, measuring real
+  DOM overflow against real live calendar data — not the daemon's own
+  `render.js` JPEG path specifically, and not the physical glass at the time
+  each fix landed. **Confirmed on the glass at the end of the session**:
+  Ricky, asked directly whether anything on the panel needed recording before
+  this changelog was written — *"Nope, panel looks great for now."*
+
+### Known unknowns
+- ~~**Whether the live panel still looks right** (this session's redesign).~~
+  **ANSWERED 2026-08-18: yes — "panel looks great for now" (Ricky, on the
+  glass, asked directly at session close).** Everything under the two
+  entries above was checked by browser-DOM measurement against live data
+  during the session; this is the eyes-on-glass confirmation the project's
+  own rule requires before either can be called settled rather than merely
+  unrefuted.
+- **Whether the reload-retry hardening holds up under a real multi-file edit
+  under normal editing cadence**, rather than the one collision that exposed
+  it. It fixed the one case observed; no second collision has been produced
+  on purpose to check the fix (a fault-injection script in the spirit of
+  `stall-test`/`idle-test` would be the honest way to confirm it, and does
+  not exist yet).
+- **Whether the cable is actually the cause of the transport stalls.** Told
+  directly, twice, by Ricky: *"I don't think the cable is the problem."*
+  Asked what he suspects instead — no answer yet as of this writing. The
+  Known hardware risk section below still names the cable as the leading
+  candidate per the reviews' own failure pattern, but that is now a
+  **disputed** hypothesis, not a settled one, and nothing should act on it
+  (cable swap, etc.) without his sign-off. See Failure log.
+
 ## Decisions worth not relitigating
 
 Recorded here so they survive a cold start. Full reasoning lives in `CLAUDE.md`.
@@ -969,9 +1116,14 @@ matter for judging the failure curve.
 |---|---|---|---|
 | 2026-08-17 ~18:07 | day 1 | Daemon exited **1073807364** (`0xC0000374`, STATUS_HEAP_CORRUPTION) — a native crash, consistent with `node-hid`. | Machine shut down for the night. |
 | 2026-08-18 07:16–07:31 | day 2 | USB endpoint stopped draining after a cold boot. Synchronous HID writes blocked the daemon's thread for ~30s at a time; panel on the vendor logo ~90% of the time. | **Physical replug of the USB-C.** Daemon self-recovered, no restart. |
+| 2026-08-18 ~10:00–11:07 | day 2, later | **5+ more stalls** during this session's pane-editing work, worker thread reporting `TRANSPORT STALLED`, individual pushes up to **6603ms** (over 2× the previous worst) and repeatedly past the ~3s forget window. `slowRun=1` / `slowRun=2` in the heartbeat. | Self-recovered each time (`panel transport recovered`) — no replug needed. |
 
-Two events in two days is early on the curve, and both are consistent with the
-cable — the failure point the reviews name most often. Neither is yet evidence
-of a dying unit. **If a third arrives, replace the cable before concluding
-anything about the panel.** The decoupled-transport decision is looking
-correct sooner than hoped.
+Two events in two days was recorded as early on the curve, both consistent
+with the cable — the failure point the reviews name most often. **Arguably a
+third arrived the same day, a few hours later** (the row above). **Ricky does
+not think it's the cable** — told directly, twice, this session. Asked what
+he suspects instead; no answer yet. This is now an open, disputed question,
+not a conclusion — do not swap the cable or otherwise act on the cable theory
+without his sign-off. The decoupled-transport decision is still doing its
+job regardless of cause: every stall this session self-recovered without a
+replug.

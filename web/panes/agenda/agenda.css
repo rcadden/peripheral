@@ -92,8 +92,11 @@ body {
 .body {
   flex: 1 1 auto;
   display: grid;
-  grid-template-columns: 1fr 462px;
-  gap: 36px;
+  /* Equal thirds, Ricky's call 2026-08-18 — the "and then what?" column read
+     too thin against the other two. 1fr three times, not hardcoded pixels:
+     stays equal if --pad or the gap below ever change. */
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 30px;
   padding-top: 26px;
   min-height: 0;
 }
@@ -121,9 +124,19 @@ body {
   white-space: nowrap;
 }
 
-/* Longer strings ("IN 2 HR 40 MIN") must not clip the fixed-width panel. */
+/* Longer strings ("IN 2 HR 40 MIN") must not clip the fixed-width panel.
+ * Re-tuned 2026-08-18 when the hero column went from 722px to an equal third
+ * (~387px) to fit the new "and then what?" column — every threshold that
+ * held at 722px broke, and the two-tier ladder wasn't enough even after
+ * that: "IN 9 HR 59 MIN" still overflowed at the smallest existing size
+ * (60px, 492px wide against a 387px column), so there's now a third step.
+ * Measured directly against the real 387px column, not estimated. */
 .countdown.len-md { font-size: 80px; }
 .countdown.len-lg { font-size: 60px; letter-spacing: 0; }
+.countdown.len-xl { font-size: 44px; letter-spacing: 0; }
+/* Only ever used on the is-now badge — see remainingSizeClass() in
+   agenda.js. "9 HR 59 MIN LEFT" doesn't fit the padded budget at len-xl. */
+.countdown.len-xxl { font-size: 34px; letter-spacing: 0; }
 
 /* An event happening right now is the one state that should feel different. */
 .countdown.is-now { color: var(--ground); background: var(--accent-hero);
@@ -164,6 +177,22 @@ body {
 .meta .cal-dot {
   display: inline-block; width: 9px; height: 9px;
   margin-right: 9px; vertical-align: 1px;
+}
+
+/* ── then: "up next", from inside the current meeting ──────────────────── */
+
+/* Re-scoped 2026-08-18 (Ricky, on the glass): only meaningful while the hero
+   is a live meeting — otherwise there's nothing to be "after" — and should
+   look like a second hero, not a footnote. It's the same width as .hero
+   (equal thirds) specifically so it can reuse .countdown/.title/.meta
+   verbatim rather than keeping a parallel, smaller type scale in sync by
+   hand. renderThen() blanks every field when the hero isn't 'now'. */
+.then {
+  border-left: 1px solid var(--rule);
+  padding-left: 28px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 /* ── agenda list ─────────────────────────────────────────────────────────── */

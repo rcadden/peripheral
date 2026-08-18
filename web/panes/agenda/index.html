@@ -24,10 +24,20 @@
 
   <div class="body">
     <section class="hero">
-      <div class="eyebrow">Up next</div>
+      <div class="eyebrow" id="heroEyebrow">Up next</div>
       <div class="countdown" id="countdown">—</div>
       <h1 class="title" id="title">—</h1>
       <div class="meta" id="meta"></div>
+    </section>
+
+    <!-- Same width as .hero (equal thirds) and reuses its typography on
+         purpose — this is "up next" for whatever comes after the hero, and
+         only appears while the hero is a live meeting. See renderThen(). -->
+    <section class="then">
+      <div class="eyebrow" id="thenEyebrow"></div>
+      <div class="countdown" id="thenCountdown"></div>
+      <h2 class="title" id="thenTitle"></h2>
+      <div class="meta" id="thenMeta"></div>
     </section>
 
     <aside class="agenda">

@@ -52,6 +52,26 @@ export function pickFocus(timed) {
 }
 
 /**
+ * The event after the one in the hero — "and then what?" The answer to
+ * whether the hero event is something you can leave immediately after, or
+ * whether another commitment sits right behind it.
+ *
+ * Walks forward from focus's position in the already-sorted `timed` array,
+ * skipping anything past. This naturally excludes a longer event that
+ * overlaps focus but started earlier (it sits before focus in start order,
+ * not after), which is correct — that one is already accounted for by focus
+ * losing the hero to duration in pickFocus.
+ */
+export function pickNext(timed, focus) {
+  if (!focus) return undefined;
+  const idx = timed.findIndex((e) => e.id === focus.id);
+  for (let i = idx + 1; i < timed.length; i++) {
+    if (timed[i].phase !== 'past') return timed[i];
+  }
+  return undefined;
+}
+
+/**
  * The whole hero decision for a day's events: sort, split all-day from timed,
  * phase the timed ones, pick the focus.
  *
@@ -73,5 +93,6 @@ export function selectAgenda(events, now) {
   const allDay = sorted.filter((e) => e.allDay);
   const timed = sorted.filter((e) => !e.allDay)
     .map((ev) => ({ ...ev, phase: classify(ev, now) }));
-  return { allDay, timed, focus: pickFocus(timed) };
+  const focus = pickFocus(timed);
+  return { allDay, timed, focus, next: pickNext(timed, focus) };
 }

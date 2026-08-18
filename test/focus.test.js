@@ -19,7 +19,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { classify, pickFocus, selectAgenda } from '../web/panes/agenda/focus.js';
+import { classify, pickFocus, pickNext, selectAgenda } from '../web/panes/agenda/focus.js';
 
 /* Local-time helper. The panel is single-machine and single-timezone by
  * design, and the real data arrives with -04:00 offsets, so building local
@@ -154,4 +154,36 @@ test('selectAgenda does not mutate or reorder the caller\'s array', () => {
  * renderer would otherwise have to special-case. */
 test('pickFocus returns undefined for an empty day', () => {
   assert.equal(pickFocus([]), undefined);
+});
+
+/* ── pickNext: the "and then what?" column ──────────────────────────────── */
+
+test('pickNext: the event right behind the hero, not the hero itself', () => {
+  const { timed, focus, next } = selectAgenda(
+    [ev('sync', 16, 0, 16, 30), ev('kwr', 17, 0, 17, 30)], at(15, 50));
+  assert.equal(focus.id, 'sync');
+  assert.equal(next.id, 'kwr');
+  assert.ok(timed);
+});
+
+test('pickNext: undefined when nothing follows the hero', () => {
+  const { next } = selectAgenda([ev('sync', 16, 0, 16, 30)], at(15, 50));
+  assert.equal(next, undefined);
+});
+
+test('pickNext: skips a longer event that overlaps but started before the hero', () => {
+  // Same shape as the shortest-duration-wins case: the practice started
+  // earlier and overlaps the meeting, so it sits before focus in start order.
+  // It must not be reported as "next" — it's already happening, not ahead.
+  const practice = ev('practice', 14, 30, 16, 30, { calendar: 'personal' });
+  const meeting = ev('meeting', 16, 0, 16, 45, { calendar: 'work' });
+  const later = ev('later', 17, 0, 17, 30);
+
+  const { focus, next } = selectAgenda([practice, meeting, later], at(16, 10));
+  assert.equal(focus.id, 'meeting');
+  assert.equal(next.id, 'later');
+});
+
+test('pickNext: undefined when there is no focus at all', () => {
+  assert.equal(pickNext([ev('past', 9, 0, 9, 30)], undefined), undefined);
 });

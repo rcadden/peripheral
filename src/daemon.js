@@ -50,12 +50,20 @@
  * renderer=down` while the truth was precisely inverted.
  */
 
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { watch } from 'node:fs';
+
 import { start as startServer, setState } from './server.js';
 import { Renderer } from './render.js';
 import { KEEPALIVE_INTERVAL_MS } from './transport/hid.js';
 import { PanelProxy } from './transport/panel-proxy.js';
 import { ApiProvider, collect } from './sources/gcal.js';
 import { StateCache } from './cache.js';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+/* What renderer.goto() reloads from — see watchPaneSource() below. */
+const WEB_DIR = path.resolve(__dirname, '..', 'web');
 
 const SOURCE_INTERVAL_MS = 60_000;
 const FPS = Number(process.env.PERIPHERAL_FPS ?? 1);
@@ -241,6 +249,91 @@ async function renderTick() {
   }
 }
 
+/**
+ * Reload the pane after a live edit.
+ *
+ * Found 2026-08-18: `renderer.open()` navigates once at daemon start, and
+ * nothing after that tells the already-open Playwright page to look at disk
+ * again. Editing agenda.js/css/html did nothing to a daemon that had been
+ * running since before the edit — the panel kept screenshotting the DOM it
+ * loaded at boot. `renderer.goto()` already existed, built for pane cycling
+ * and never called; this is its first real caller.
+ *
+ * Reloads the SAME url rather than restarting the whole daemon process. A
+ * full restart also closes and reopens the HID device, which is not
+ * something to do reflexively on every CSS tweak while the transport is
+ * already fighting a flaky cable (see roadmap: Standing watch,
+ * "Panel hardware failure curve").
+ */
+async function reloadPane(reason) {
+  if (!renderer || !rendererOpen) return true; // nothing to reload, don't retry
+  if (rendering) return false; // told the caller to try again shortly
+  rendering = true;
+  try {
+    await renderer.goto(paneUrl);
+    console.log(`[daemon] pane reloaded — ${reason}`);
+  } catch (err) {
+    console.error(`[daemon] pane reload failed: ${err.message.split('\n')[0]}`);
+  } finally {
+    rendering = false;
+  }
+  return true;
+}
+
+/**
+ * Same day, same feature: a reload attempt that lands exactly when a capture
+ * is in flight was silently dropped rather than retried, so the page kept
+ * running the code from before the edit with nothing in the log past a
+ * one-line "skipped" warning — indistinguishable at a glance from a reload
+ * that never happened at all. `renderTick` runs on a 1000ms cadence and a
+ * capture is normally tens of ms, so a short retry loop clears the race
+ * almost every time.
+ */
+async function reloadPaneWithRetry(reason, attemptsLeft = 6) {
+  const done = await reloadPane(reason);
+  if (done) return;
+  if (attemptsLeft <= 0) {
+    console.warn(`[daemon] pane reload gave up (${reason}) — a capture kept winning the race`);
+    return;
+  }
+  setTimeout(() => reloadPaneWithRetry(reason, attemptsLeft - 1), 200);
+}
+
+/**
+ * Watch web/ for edits and reload the live pane automatically. Debounced —
+ * saving html/css/js together for one change must fire one reload, not
+ * three. Native recursive fs.watch; this project runs on Windows only today,
+ * where it works. If it ever silently stops firing, restart the daemon by
+ * hand — this is a development convenience, not something the push loop or
+ * transport depend on.
+ *
+ * 800ms, not the original 400ms — found 2026-08-18 by hitting it. Editing
+ * index.html, agenda.css and agenda.js as three separate saves a couple of
+ * seconds apart (normal for a multi-file change) fired three separate
+ * reloads, and one landed on a real in-between state: new HTML markup with
+ * agenda.js not yet resaved. The page doesn't crash — it just throws in
+ * `pageerror` every render tick forever, silently, because nothing restarts
+ * a page that's merely erroring, only one that's closed. `console.error`
+ * caught it (`[render] pane threw`), a manual re-touch fixed it, but the
+ * daemon does not recover from this on its own. Widening the window makes a
+ * multi-file edit more likely to land in one reload instead of three, but
+ * does NOT fix the underlying race — saves are never atomic as a set. If the
+ * log shows repeating `pane threw` after an edit, touch any file in web/
+ * again to force a clean reload.
+ */
+function watchPaneSource() {
+  let timer = null;
+  try {
+    watch(WEB_DIR, { recursive: true }, (_event, filename) => {
+      clearTimeout(timer);
+      timer = setTimeout(() => reloadPaneWithRetry(filename ?? 'web/ changed'), 800);
+    });
+    console.log(`[daemon] watching ${WEB_DIR} for pane edits`);
+  } catch (err) {
+    console.warn(`[daemon] pane file watch not available: ${err.message}`);
+  }
+}
+
 /* The push loop and its reconnect backoff used to live here. They are now on
  * the transport thread — see `hid-worker.js`. They were moved rather than
  * rewritten: the logic was correct, and the reconnect backoff in particular did
@@ -297,6 +390,8 @@ async function main() {
   await renderTick();
 
   setInterval(renderTick, RENDER_INTERVAL_MS);
+
+  watchPaneSource();
 
   console.log(`[daemon] running — render every ${RENDER_INTERVAL_MS}ms on this ` +
               `thread, push every ${KEEPALIVE_INTERVAL_MS}ms on the transport ` +
