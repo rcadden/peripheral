@@ -28,8 +28,15 @@ on a worker thread and owns its own push cadence**, a stall reports as
 paths are exercised rather than assumed. The OAuth token also refreshed
 unattended overnight — the last genuinely unknown thing about Sprint 1.
 
-Next: **Sprint 2**. Nothing in it is started; two items want a conversation
-before code. See the handoff.
+Next: **Sprint 2 — Agenda, second pass**, which opens now for real. It had been
+nominally "current" for a day with zero completed items, because every session
+since Sprint 1 closed was spent hardening Sprint 1 rather than starting Sprint 2.
+
+**The roadmap was renumbered 2026-08-18** — Sprint 2 bundled agenda polish with
+a multi-pane system and is now split into Sprints 2, 3 and 4; the release sprint
+moved from 3 to **5**. A mapping table for the dead labels is at the top of
+`directives/roadmap.md`, along with a **Standing watch** list of things that
+cannot be closed by working on them. See the handoff.
 
 <!-- Superseded 2026-08-17, kept per the no-tidying rule: -->
 <details><summary>Previous status (pre-OAuth)</summary>
@@ -44,7 +51,7 @@ the entire fetch path in one go.
 </details>
 
 > **Starting a session? Read
-> [`docs/plans/session-handoff-2026-08-18.md`](docs/plans/session-handoff-2026-08-18.md)
+> [`docs/plans/session-handoff-2026-08-18b.md`](docs/plans/session-handoff-2026-08-18b.md)
 > first.** It has the ordered next actions, what is verified and by what
 > method, and the open questions that need Ricky.
 
@@ -191,7 +198,7 @@ the contract.
 |---|---|
 | Google OAuth client ID / secret | **NOT YET CREATED.** Create as **Desktop app** in a *personal* Cloud project, not Balcom's. Flow is written — `npm run auth`. **`.env` now exists with these two lines blank**; fill them in there. |
 | Repo location | **`C:\dev\peripheral`** — deliberately NOT in OneDrive. See Lessons Learned. |
-| Remote | `github.com/rcadden/peripheral` — **private** until Sprint 3, then public. |
+| Remote | `github.com/rcadden/peripheral` — **private** until the release sprint (**Sprint 5**, was Sprint 3 before the 2026-08-18 renumber), then public. |
 | Token store | `%LOCALAPPDATA%\Peripheral\tokens.json` — **outside the repo on purpose.** A refresh token has no business in a project directory. Override with `PERIPHERAL_TOKEN_PATH`. |
 | Personal calendar | `grcadden@gmail.com` — confirmed reachable. Also natively shared **into** the work calendar, which is how the primary gets it. |
 | Work calendar (Balcom) | **PRIMARY account — critical path.** Direct OAuth, untested. Sharing work→personal is confirmed blocked; see below. |

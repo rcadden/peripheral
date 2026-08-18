@@ -20,7 +20,7 @@ have nothing in them and say so, rather than padding each one to look thorough.
 ## Step 0 — Verification Gate (BLOCKING)
 
 Drywater asks "which channels do we ship to." Peripheral has no channels: the
-repo is private until Sprint 3 and there is exactly one user. **Its equivalent
+repo is private until the release sprint and there is exactly one user. **Its equivalent
 question is what was actually verified, and by what method** — because this
 project's most expensive recurring mistake is recording a claim stronger than
 the evidence behind it.
@@ -78,7 +78,9 @@ client secret and is gitignored; the token store and state cache live in
 git add -A && git diff --cached | grep -nE 'GOOGLE_CLIENT_SECRET=.+|GOCSPX-|refresh_token"?\s*[:=]\s*"[A-Za-z0-9_-]{10}' || echo clean
 ```
 
-**This repo goes public in Sprint 3.** Treat every commit as though it already
+**This repo goes public in the release sprint** (Sprint 5 since the 2026-08-18
+renumber — referred to by name here so a future renumber cannot make this line
+lie). Treat every commit as though it already
 is — history is not cleaned later, and a secret in an old commit survives the
 repo going public whether or not the file still exists.
 

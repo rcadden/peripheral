@@ -3,6 +3,58 @@
 Sprints are thematic, not time-boxed. `- [x]` marks done; nothing is deleted.
 **Bold** items are the critical path.
 
+## Renumbering — 2026-08-18
+
+**Sprint 2 was split.** It bundled "make the one pane right" with "build a
+multi-pane system": two subsystems that share no code, no design decisions, and
+no failure modes, behind eleven mixed items and two gates that could not be
+closed by working on them. Split so each sprint answers one question and you can
+tell when it is answered.
+
+**Mapping for dead labels — old references resolve as follows:**
+
+| Old label | Now |
+|---|---|
+| Sprint 2 — *More of life* → "Agenda pane, second pass" | **Sprint 2 — Agenda, second pass** |
+| Sprint 2 — *More of life* → "New panes" | **Sprint 3** (cycling + weather) and **Sprint 4** (the rest) |
+| **Sprint 3 — *Polish and release*** | **Sprint 5 — Polish and release** (contents unchanged) |
+
+Anything written before this date saying "Sprint 3" means today's Sprint 5.
+Nothing was deleted; items moved between headings and the originals are marked
+where they changed.
+
+**Also recorded, because it caused real confusion:** Sprint 1 closed 2026-08-17
+and the roadmap advanced to Sprint 2 the same day, but every session since spent
+its time *hardening Sprint 1* — the worker-thread transport, the hero rule, the
+agenda time column. **Sprint 2 had zero completed items and had been "current"
+for a day without being worked.** It opens now, for real.
+
+### Standing watch — not sprint items
+
+Things that cannot be closed by working on them. They need time, real-world
+events, or a loaded machine, so they are watched rather than checked off. As
+sprint gates they only made a sprint look stalled.
+
+- **The `travel` (TripIt) label has never rendered.** Zero events on the day it
+  was wired up. Needs Ricky to actually have a trip. Not a suspected defect — a
+  blind spot with nothing disproving it either.
+- **`worstPush` drift.** A 2013ms push was observed 2026-08-18 on an idle
+  machine (typical: 200–630ms). Harmless in isolation — well inside the ~3s
+  forget window — but an upward trend over days is the signal that the USB-C
+  cable is degrading. **Do not tune `SLOW_PUSH_MS` down to chase it**; that
+  threshold is the panel's measured forget window.
+- **Panel hardware failure curve.** Two events in two days (2026-08-17 heap
+  corruption, 2026-08-18 endpoint stall), both consistent with the cable rather
+  than the unit. **If a third arrives, replace the cable before concluding
+  anything about the panel.** Dated log at the bottom of `CHANGELOG.md`.
+- **Cadence on a genuinely busy machine.** `npm run stall-test` proves the main
+  thread survives a blocked transport; it does not prove the transport keeps 1
+  fps while a Teams call and a build are running. Watch `worstPush` and the
+  heartbeat deltas under real load.
+- **Whether `terminate()` interrupts a real wedged `node-hid` write.**
+  Unknowable without a real wedge; `Atomics.wait` is a V8-level block and a
+  stuck driver call is not. The respawn does not depend on it.
+
 ## Sprint 1 — Foundation
 - [x] Identify the hardware and its actual interface (HID `0416:5302`, not a monitor)
 - [x] Confirm which calendars are reachable from the personal Google account
@@ -95,10 +147,15 @@ Sprints are thematic, not time-boxed. `- [x]` marks done; nothing is deleted.
 
 **Sprint 1 is complete.** The panel shows Ricky's real day.
 
-## Sprint 2 — More of life
+## Sprint 2 — Agenda, second pass
 
-### Agenda pane, second pass
-Everything here came from living with real data on the real panel, 2026-08-17.
+**The question: is the one pane right?** Everything here came from living with
+real data on the real panel, 2026-08-17 and 2026-08-18.
+
+*Was "Sprint 2 — More of life", whose "New panes" half is now Sprints 3 and 4.*
+
+**Three of these need Ricky before any code.** They are tagged `NEEDS RICKY` so
+a session does not pick one up and stall halfway.
 
 - [ ] **Third pane: "and then what?"** — keep the current left/right split
       (now on the left, today's schedule on the right) and add a middle column
@@ -109,7 +166,10 @@ Everything here came from living with real data on the real panel, 2026-08-17.
       the next event but not how much room there is before it.
       Open: what the middle pane shows when the gap is hours, or when nothing
       follows. "Clear until 4pm" is probably more useful than an empty column.
-- [~] **Overlap precedence — needs real rules, not a clean shift.** ~~Right now
+- [~] **Overlap precedence — needs real rules, not a clean shift.**
+      **`NEEDS RICKY`** — the roadmap has said "wants a conversation before
+      code" since it was written, and that has not happened yet.
+      ~~Right now
       the hero picks the concurrent event ENDING SOONEST~~ **CORRECTED
       2026-08-18: ending-soonest was wrong and is gone.** It failed on a real
       day — at 4:10pm a 2:30–4:30 practice and a 4:00–4:45 meeting were both
@@ -134,15 +194,25 @@ Everything here came from living with real data on the real panel, 2026-08-17.
       rows in the agenda list. Shades-of-one-hue is likelier to work than more
       hues. Needs design work before implementation.
 - [ ] Revisit whether `focusTime` and `outOfOffice` should be able to take the
-      hero slot. Kept deliberately — blocked time is real time — but a
-      countdown to "Focus time" may read as noise. Decide after living with it.
+      hero slot. **`NEEDS RICKY`** — a judgement, not a build. Kept deliberately
+      — blocked time is real time — but a countdown to "Focus time" may read as
+      noise. *Partly overtaken 2026-08-18: the shortest-duration rule already
+      demotes a long block behind a live short meeting, so the bad case that
+      motivated this (a two-hour block outranking a 30-minute meeting) is gone.
+      What remains is narrower — whether a block should hold the hero when
+      nothing else is live.*
 - [ ] **Re-decide the accent blue and the type scale after a few days of real
-      use.** Both were accepted provisionally on 2026-08-17, explicitly "not
-      final". Queued here so the revisit is a scheduled step rather than
-      something that only happens if Ricky remembers to complain.
-- [ ] **See the `travel` label render at least once.** The TripIt feed returned
-      zero events on the day it was wired up, so that calendar's label and tint
-      have never appeared on the panel. Not a known defect — a known blind spot.
+      use.** **`NEEDS RICKY` — and this one is DUE.** Both were accepted
+      provisionally on 2026-08-17, explicitly "not final". Queued here so the
+      revisit is a scheduled step rather than something that only happens if
+      Ricky remembers to complain. *He has now read the panel across two days,
+      including spotting a spacing defect on it unaided (2026-08-18) — which is
+      exactly the informed look this was waiting for.*
+- ~~**See the `travel` label render at least once.**~~ **MOVED 2026-08-18 to
+      Standing watch** (top of this file). It cannot be closed by working on it:
+      the TripIt feed returned zero events, so it needs Ricky to actually have a
+      trip. As a sprint checkbox it was an unclosable gate that only made the
+      sprint look stalled.
 - [x] **Watch an all-day event reach the panel.** ~~The fix has never been
       exercised by real data.~~ **DONE 2026-08-18.** A genuine all-day entry
       ("Donna Mills passed away", from a subscribed calendar) reached the pane
@@ -151,17 +221,61 @@ Everything here came from living with real data on the real panel, 2026-08-17.
       meeting did. Confirmed in a JPEG captured through `src/render.js`, so it
       is verified at the Rendered tier rather than only tested.
 
-### New panes
-- [ ] Pane cycling with per-pane dwell times
-- [ ] Photos pane — **blocked pending verification.** Google restricted the
-      Photos Library API; broad album read may no longer be available to
-      third-party apps. Confirm current policy before designing. Fallbacks:
-      Picker API session, or a synced local/Drive folder.
-- [ ] Inbox pane — unread count and top senders, no message bodies on screen
-- [ ] Weather pane
-- [ ] Tomorrow's first event when today is done
+## Sprint 3 — The multi-pane system
 
-## Sprint 3 — Polish and release
+**The question: can the panel show more than one thing?**
+
+*Was the first half of "Sprint 2 — More of life → New panes".*
+
+- [ ] **Pane cycling with per-pane dwell times.** The infrastructure: which pane
+      is showing, how long each holds, and how the renderer switches without the
+      push loop ever noticing. `render.js` already has `goto()` for exactly
+      this, unused so far.
+      Constraints that are already settled and must not be re-litigated: the
+      push loop runs at 1 fps on the transport thread regardless of what the
+      renderer is doing, and the panel forgets after ~3s — **a pane switch must
+      never cost a frame.** If a `goto()` plus font settle takes longer than the
+      forget window, the previous pane's frame keeps shipping until the new one
+      is ready. Never blank between panes.
+- [ ] **Weather pane — the proof, not a nice-to-have.** Cycling cannot be
+      verified with one pane, and shipping cycling infrastructure with nothing
+      to cycle to would be untested infrastructure — the exact trap that cost
+      the 2026-08-18 session. Weather is the cheapest real second pane: no
+      OAuth, no new scopes, no new token. It earns its place here by being the
+      thing that proves the mechanism.
+      Open: which source, and whether it needs an API key (prefer a zero-cost
+      one — name the recurring cost before choosing).
+
+**Closing condition:** the panel cycles between agenda and weather, unattended,
+across a logon, with no blank frame at the switch and no flicker on the glass.
+
+## Sprint 4 — More panes
+
+**The question: what else earns a pane?**
+
+*Was the second half of "Sprint 2 — More of life → New panes".*
+
+Each of these is roughly one session and they are independent — order them by
+what Ricky actually wants to see, not by this list.
+
+- [ ] **Tomorrow's first event when today is done.** The smallest and probably
+      the most valuable: the agenda currently reads "Nothing left today", which
+      is true and unhelpful at 5pm. Arguably belongs in the agenda pane rather
+      than a pane of its own — decide when building it.
+- [ ] **Inbox pane** — unread count and top senders, **no message bodies on
+      screen.** This thing sits in a room; the constraint is not negotiable.
+      Needs a new OAuth scope (Gmail readonly) against the same internal-app
+      client, which is the part to verify first.
+- [ ] **Photos pane — research spike BEFORE it is a build item.** Google
+      restricted the Photos Library API; broad album read may no longer be
+      available to third-party apps. **Confirm current policy before designing
+      anything.** Fallbacks: Picker API session, or a synced local/Drive folder
+      — the local folder needs no API at all and may simply be the answer.
+
+## Sprint 5 — Polish and release
+
+*Was Sprint 3. Renumbered 2026-08-18 when Sprint 2 was split; contents
+unchanged. Any earlier reference to "Sprint 3 — Polish and release" means this.*
 - [ ] **Colour picker in the packaged release, like Golem's.** Right now the
       accent hues are constants in `src/palette.js` with env-var overrides, and
       re-tinting the panel means editing source and running `npm run palette`.

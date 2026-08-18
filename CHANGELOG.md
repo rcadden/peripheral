@@ -547,6 +547,54 @@ pushes a frame to real glass.
   2026-08-17). The in-org project is the only one. Closes the housekeeping item
   raised when its client id/secret were exposed in a chat transcript.
 
+### Changed — the roadmap was split and renumbered (2026-08-18)
+
+- **Sprint 2 bundled two subsystems.** "Agenda pane, second pass" is polish on a
+  thing that exists; "New panes" needs pane-cycling infrastructure that does
+  not. They share no code, no design decisions and no failure modes, and sat
+  behind eleven mixed items — builds, decisions only Ricky can make, and gates
+  that could not be closed by working on them at all.
+- **Now four sprints, each answering one question**, so it is possible to tell
+  when one is finished:
+
+  | Sprint | Question |
+  |---|---|
+  | 2 — Agenda, second pass | Is the one pane right? |
+  | 3 — The multi-pane system | Can the panel show more than one thing? |
+  | 4 — More panes | What else earns a pane? |
+  | 5 — Polish and release | Can someone else run this? *(was Sprint 3)* |
+
+- **A mapping table for the dead labels is at the top of the roadmap**, per the
+  never-tidy-history rule. One existing label moved: **Sprint 3 (Polish and
+  release) is now Sprint 5.** Three live references were corrected to name the
+  *release sprint* rather than a number, so a future renumber cannot make them
+  lie: `CLAUDE.md`'s remote row and two lines in
+  `.claude/commands/session-close.md`. Historical references in this changelog
+  and in previous handoffs are **not** edited — the mapping note resolves them.
+- **New: a "Standing watch" section, for things that cannot be closed by working
+  on them.** The `travel` label needs Ricky to have a trip; `worstPush` drift
+  and the panel's failure curve need weeks; busy-machine cadence needs a loaded
+  PC. As sprint checkboxes these were unclosable gates that only made a sprint
+  look stalled. The `travel` item moved there out of Sprint 2.
+- **Weather was promoted from "a pane" to the proof of pane cycling** (Sprint 3
+  rather than Sprint 4). Cycling cannot be verified with one pane, and shipping
+  the infrastructure with nothing to cycle to would be untested infrastructure —
+  the exact trap that cost this morning's session. Weather is the cheapest real
+  second pane: no OAuth, no new scope, no new token.
+- **Photos is explicitly a research spike before it is a build item.** Google
+  restricted the Photos Library API and the local-folder fallback may simply be
+  the answer; designing before confirming policy would be work done twice.
+- **Decision items are tagged `NEEDS RICKY`.** Three of Sprint 2's five need a
+  conversation before code, and unflagged they invite a session to pick one up
+  and stall halfway.
+- **Recorded because it caused real confusion:** Sprint 1 closed 2026-08-17 and
+  the roadmap advanced the same day, but every session since spent its time
+  *hardening Sprint 1* — the worker-thread transport, the hero rule, the agenda
+  time column. **Sprint 2 had zero completed items and had been nominally
+  "current" for a day without being worked**, which is the roadmap describing a
+  state the project was not in. Noted in the roadmap so a cold read does not
+  inherit the same impression.
+
 ### Fixed — the agenda time column collided with the title (2026-08-18)
 
 - **Seen on the glass by Ricky:** list rows read `10:00 AMWeekly DS + Media…`
