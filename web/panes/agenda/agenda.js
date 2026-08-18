@@ -135,7 +135,13 @@ function remainingSizeClass(text) {
 /* Display labels and tints, keyed by PeripheralEvent.calendar — which is the
  * label from the calendarId -> label map, not the account. Keys here must
  * match guessLabel() in src/sources/gcal.js, which is what the daemon uses
- * when no map is configured. An unknown key still renders, dimmed. */
+ * when no map is configured. An unknown key still renders, dimmed.
+ *
+ * Currently unused by any renderer — the meta line dropped the calendar
+ * label 2026-08-18 ("obvious from the event name"). Kept rather than
+ * deleted: it's exactly what Sprint 2's "colour-code entries by calendar"
+ * item needs (see roadmap.md), likely applied to the tick/title color
+ * instead of a text label. Delete only if that item is dropped too. */
 const CALENDARS = {
   work: { label: 'Balcom', tint: 'var(--accent-cool)' },
   personal: { label: 'Personal', tint: 'var(--accent-hero)' },
@@ -218,7 +224,7 @@ function render() {
 
   renderHero(focus, timed, allDay, now);
   renderThen(focus, next);
-  renderList(timed, allDay, focus, now);
+  renderList(timed, allDay, focus, next, now);
   renderProgress(focus, timed, now);
 }
 
@@ -251,8 +257,9 @@ function renderHero(focus, marked, allDay, now) {
       el.countdown.textContent = 'CLEAR';
       el.countdown.className = 'countdown';
       el.title.textContent = allDay[0].title;
-      el.meta.innerHTML = `<span>All day</span>`
-        + (allDay.length > 1 ? `<span class="sep">·</span><span>+${allDay.length - 1} more</span>` : '');
+      el.meta.innerHTML = `<div class="meta-line"><span>All day</span>`
+        + (allDay.length > 1 ? `<span class="sep">·</span><span>+${allDay.length - 1} more</span>` : '')
+        + `</div>`;
       return;
     }
     el.countdown.textContent = 'DONE';
@@ -318,9 +325,15 @@ function renderThen(focus, next) {
     el.thenCountdown.textContent = text;
     el.thenCountdown.className = ['countdown', countdownSizeClass(text)].filter(Boolean).join(' ');
     el.thenTitle.textContent = 'Free time';
-    el.thenMeta.innerHTML = `<span>Then</span><span class="sep">·</span>`
+    // Was three bare <span>s with no wrapping div — since .meta is a flex
+    // COLUMN, each one became its own line instead of one line of three
+    // parts, growing .then ~33px taller than its row and pushing the whole
+    // grid row (all three columns share row height) past the footer. Same
+    // bug class as the "All day" branch above, just missed here during the
+    // meta-stacking redesign.
+    el.thenMeta.innerHTML = `<div class="meta-line"><span>Then</span><span class="sep">·</span>`
       + `<span>${esc(next.title)}</span><span class="sep">·</span>`
-      + `<span>${esc(fmtTime(new Date(next.start)))}</span>`;
+      + `<span>${esc(fmtTime(new Date(next.start)))}</span></div>`;
     return;
   }
 
@@ -335,24 +348,42 @@ function renderThen(focus, next) {
 /** The meta line under a title: calendar dot + label, time range, conference,
  * location, attendee count. Shared by the hero and the "then" column — same
  * event shape, same line. */
+/**
+ * Was one inline line, `·`-joined. Ricky, 2026-08-18: the time range wrapped
+ * mid-string ("2:00 PM – 2:30" / "PM") because the whole joined line was too
+ * long for the column — and separately, there was a lot of unused vertical
+ * space between the title and this line (`.meta` sits at `margin-top: auto`)
+ * that a single line can't use.
+ *
+ * Went through two revisions the same day. First cut gave every fact its own
+ * line (up to 5: calendar, time, conference, location, attendees) and that
+ * overflowed the column the moment all five showed up at once — measured,
+ * not assumed: `.then`'s bottom edge landed 20px past its container with
+ * conference + attendees both present and no location even in the mix.
+ * Second cut folded conference onto the time line. **Then Ricky: drop the
+ * calendar line entirely** — "that'll be obvious based on the name of the
+ * event" — and always give time its own line rather than sharing it with
+ * conference. Now exactly two lines: time alone, then location + attendees
+ * (+ conference, folded in here instead, since it's no longer welcome on the
+ * time line and still needs to live somewhere).
+ */
 function buildMetaHtml(ev) {
   const start = new Date(ev.start);
   const end = new Date(ev.end);
-  const cal = CALENDARS[ev.calendar] || { label: ev.calendar, tint: 'var(--text-dim)' };
-  const bits = [`${fmtTime(start)} – ${fmtTime(end)}`];
-  // The normaliser detects Meet, Zoom and Teams.
   const CONF = { meet: 'Meet', zoom: 'Zoom', teams: 'Teams' };
-  if (CONF[ev.conference]) bits.push(CONF[ev.conference]);
-  // A conference link pasted into the location field is already reported as
-  // the conference; repeating the raw URL would eat the whole meta line.
-  if (ev.location && !/^https?:\/\//i.test(ev.location)) {
-    bits.push(shortLocation(ev.location));
-  }
-  if (ev.attendeeCount) bits.push(`${ev.attendeeCount} people`);
 
-  return `<span class="cal-dot" style="background:${cal.tint}"></span>`
-    + `<span>${cal.label}</span><span class="sep">·</span>`
-    + bits.map(esc).join('<span class="sep">·</span>');
+  const lines = [`<span>${esc(`${fmtTime(start)} – ${fmtTime(end)}`)}</span>`];
+
+  // A conference link pasted into the location field is already reported as
+  // the conference; repeating the raw URL would be redundant.
+  const hasLocation = ev.location && !/^https?:\/\//i.test(ev.location);
+  const bits = [];
+  if (hasLocation) bits.push(esc(shortLocation(ev.location)));
+  if (CONF[ev.conference]) bits.push(esc(CONF[ev.conference]));
+  if (ev.attendeeCount) bits.push(esc(`${ev.attendeeCount} people`));
+  if (bits.length) lines.push(`<span>${bits.join(' <span class="sep">·</span> ')}</span>`);
+
+  return lines.map((l) => `<div class="meta-line">${l}</div>`).join('');
 }
 
 /**
@@ -374,23 +405,23 @@ function shortLocation(loc) {
   return useful.length > 38 ? `${useful.slice(0, 37)}…` : useful;
 }
 
-function renderList(marked, allDay, focus, now) {
-  // The panel fits six rows. All-day entries are pinned at the top and take
-  // from that budget — they are context for the day, so at most two get to
-  // crowd out timed events, which are the thing you actually came for.
-  const MAX = 6;
-  const pinned = allDay.slice(0, 2);
+// All-day entries are worth seeing once — Ricky's already seen them by the
+// time this hour arrives, so they stop being pinned after it.
+const ALLDAY_CUTOFF_HOUR = 10;
 
-  let rows = marked;
+function renderList(marked, allDay, focus, next, now) {
+  // Ricky, 2026-08-18: don't show what's already over, and stop pinning
+  // all-day entries after 10am — both are things he's already seen. This
+  // replaces the old "keep a little of what's done for context" slice
+  // entirely: past events are dropped outright, not biased toward.
+  const pinned = now.getHours() < ALLDAY_CUTOFF_HOUR ? allDay.slice(0, 2) : [];
+
+  // Was 5. Past events no longer compete for a slot at all, so the six-row
+  // budget from before the is-now/is-next wrap redesign is back — verified
+  // this still fits with both special rows wrapped (see agenda.css history).
+  const MAX = 6;
   const budget = MAX - pinned.length;
-  if (rows.length > budget) {
-    // Keep a little of what's done for context, but bias hard toward ahead.
-    const firstUpcoming = rows.findIndex((e) => e.phase !== 'past');
-    const start = firstUpcoming < 0
-      ? rows.length - budget
-      : Math.max(0, Math.min(firstUpcoming - 1, rows.length - budget));
-    rows = rows.slice(start, start + budget);
-  }
+  const rows = marked.filter((e) => e.phase !== 'past').slice(0, budget);
 
   const allDayHtml = pinned.map((ev) => `<li class="event is-allday">`
     + `<span class="tick"></span>`
@@ -399,9 +430,14 @@ function renderList(marked, allDay, focus, now) {
     + `</li>`).join('');
 
   const timedHtml = rows.map((ev) => {
-    const cls = ev.phase === 'past' ? 'is-past'
-      : ev.phase === 'now' ? 'is-now'
-      : focus && ev.id === focus.id ? 'is-next' : '';
+    // Was `ev.id === focus.id` — a leftover from before the hero/then split,
+    // when "focus" and "the next thing" were the same event whenever nothing
+    // was live. Now that `next` is its own value (the row shown in the
+    // then-column), the list must match against THAT, not the hero — found
+    // by checking real numbers: the 2:00pm row showing no highlight at all
+    // while it was clearly the "up next" event in the middle column.
+    const cls = ev.phase === 'now' ? 'is-now'
+      : next && ev.id === next.id ? 'is-next' : '';
     return `<li class="event ${cls}">`
       + `<span class="tick"></span>`
       + `<span class="when">${fmtTimeShort(new Date(ev.start))}</span>`

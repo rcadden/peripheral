@@ -156,28 +156,37 @@ body {
   overflow: hidden;
 }
 
+/* Was one `·`-joined line. Ricky, 2026-08-18: the time range wrapped
+   mid-string because the whole joined line ran past the column width, and
+   separately there was dead space between the title and this line
+   (`margin-top: auto`) that one line can never use. Now a stack of short
+   lines — each fact short enough on its own to never wrap, and several of
+   them fill the space one long line left empty. See buildMetaHtml(). */
 .meta {
   margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
   font-size: 22px;
   letter-spacing: 0.04em;
   color: var(--text-dim);
   font-variant-numeric: tabular-nums;
-  /* Hard backstop. shortLocation() trims the common case, but no field from a
-     calendar invite may ever be able to reflow the hero into the progress bar
-     — the panel has no scrollbar and no second chance. Seen on first contact
-     with real data: an autocompleted postal address wrapped this to three
-     lines and pushed it through the footer. Two lines, then ellipsis. */
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
+}
+
+.meta-line {
+  display: flex;
+  align-items: baseline;
+  white-space: nowrap;
+  /* Hard backstop — shortLocation() trims the common case, but no single
+     fact may ever be able to push this past the column it was given. */
   overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .meta .sep { color: var(--text-faint); margin: 0 10px; }
-.meta .cal-dot {
-  display: inline-block; width: 9px; height: 9px;
-  margin-right: 9px; vertical-align: 1px;
-}
+/* .meta .cal-dot REMOVED 2026-08-18 — the meta line dropped the calendar
+   label the same day ("obvious from the event name," Ricky), so nothing
+   emits a `.cal-dot` inside `.meta` any more. */
 
 /* ── then: "up next", from inside the current meeting ──────────────────── */
 
@@ -199,7 +208,11 @@ body {
 
 .agenda {
   border-left: 1px solid var(--rule);
-  padding-left: 34px;
+  /* Was 34px. Ricky, 2026-08-18: wanted the equal-thirds grid kept as-is
+     aesthetically, but every row in the list was truncating hard. This
+     doesn't touch the grid — it's free width reclaimed from the divider
+     gutter, handed straight to titles. */
+  padding-left: 20px;
   min-width: 0;
   display: flex;
   flex-direction: column;
@@ -215,8 +228,11 @@ body {
 .events {
   list-style: none;
   display: grid;
-  grid-template-columns: 13px max-content 1fr;
-  gap: 13px 12px;
+  /* Tick column was 13px for a 9px dot — the extra 4px was never visual
+     weight, just unused gutter. Tightened alongside the column gap
+     (12px -> 9px) for the same reason: reclaim width nobody was reading. */
+  grid-template-columns: 9px max-content 1fr;
+  gap: 11px 9px;
   min-height: 0;
 }
 
@@ -246,18 +262,41 @@ body {
   font-size: 24px;
   letter-spacing: 0.01em;
   color: var(--text-dim);
-  white-space: nowrap;
 }
 
 .event .tick { width: 9px; height: 9px; align-self: center; background: var(--text-faint); }
-.event .when { color: var(--text-dim); font-variant-numeric: tabular-nums; text-align: right; }
-.event .what { overflow: hidden; text-overflow: ellipsis; }
+.event .when { color: var(--text-dim); font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+/* Every row truncated to one line, even the meeting you're sitting in —
+   equal-thirds narrowed this column enough that most titles cut off after
+   2-3 words. Ricky, 2026-08-18: liked equal thirds, wanted the truncation
+   fixed without giving it up. Progressive disclosure instead of more width:
+   the row that's live and the row right after it wrap to their full title
+   (up to 2 lines); everything else — later today, or already past — stays
+   single-line and compact. The panel's job for those is "you have something
+   at 3pm", not the full name; you get that when it becomes current or next. */
+.event .what { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Top-align the whole row, not just the title, once it can be two lines —
+   baseline alignment (the default, for single-line rows) would otherwise
+   anchor to the wrapped title's first line and leave the time looking
+   vertically misplaced against it. */
+.event.is-now, .event.is-next { align-items: start; }
+/* `.tick` carries its own `align-self: center` above, for the single-line
+   case, and align-self on a child wins over the parent's align-items — so
+   the row-level override just above did nothing for the tick specifically.
+   Seen on the glass: the bullet floated at the vertical center of the whole
+   two-line block instead of sitting with the first line. Overridden back to
+   `start` only where the row can wrap. */
+.event.is-now .tick, .event.is-next .tick { align-self: start; margin-top: 8px; }
+.event.is-now .what, .event.is-next .what {
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
 
-/* Past — dimmed, but never struck through: a strikethrough at this pixel
-   density turns the glyphs to mush. Dropping contrast reads faster anyway. */
-.event.is-past { color: var(--text-faint); }
-.event.is-past .when { color: var(--text-faint); }
-.event.is-past .tick { background: transparent; box-shadow: inset 0 0 0 1px var(--text-faint); }
+/* .event.is-past REMOVED 2026-08-18 — Ricky: don't show events that have
+   already ended, full stop. renderList() now filters them out before they
+   ever reach the DOM, so nothing produces this class any more. */
 
 /* The next event, echoed in the list, in the cool accent. */
 .event.is-next { color: var(--accent-cool); }

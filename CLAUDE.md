@@ -29,14 +29,22 @@ paths are exercised rather than assumed. The OAuth token also refreshed
 unattended overnight — the last genuinely unknown thing about Sprint 1.
 
 **Sprint 2's build item shipped 2026-08-18** — the "and then what?" middle
-column, iterated three rounds against live feedback the same session
-(equal-thirds layout, "Happening"/time-remaining on the hero, free-time vs.
-back-to-back on the then-column, tighter agenda-list time format). Confirmed
-on the glass: *"panel looks great for now."* Along the way, found and fixed
-that the daemon never reloaded edited pane code on its own — it now
-watches `web/` and reloads automatically. Remaining in Sprint 2: two
-`NEEDS RICKY` decisions (the accent blue/type scale revisit, and overlap
-precedence beyond duration) and one design item (colour-code by calendar).
+column, iterated against live feedback across the whole day, including a
+round driven by an actual photo of the glass (list truncation, tick
+alignment, meta line stacked and then re-stacked twice more). Along the way,
+found and fixed that the daemon never reloaded edited pane code on its own —
+it now watches `web/` and reloads automatically.
+
+**Overlap precedence — the other `NEEDS RICKY` item — got its conversation
+2026-08-18, built from Ricky's real calendar rather than hypotheticals.**
+Three rules shipped: a named duration override for one recurring meeting
+that runs shorter than it's booked, a tiebreak change (latest start wins,
+not ending soonest), and personal-calendar events demoted-by-default unless
+claimed by name or a matching work-calendar block. Explicitly not settled —
+Ricky expects ongoing tuning both in the logic and in how he titles future
+calendar entries. Remaining in Sprint 2: one `NEEDS RICKY` decision (the
+accent blue/type scale revisit — still overdue) and one design item
+(colour-code by calendar).
 
 **The roadmap was renumbered 2026-08-18** — Sprint 2 bundled agenda polish with
 a multi-pane system and is now split into Sprints 2, 3 and 4; the release sprint
@@ -57,7 +65,7 @@ the entire fetch path in one go.
 </details>
 
 > **Starting a session? Read
-> [`docs/plans/session-handoff-2026-08-18c.md`](docs/plans/session-handoff-2026-08-18c.md)
+> [`docs/plans/session-handoff-2026-08-18d.md`](docs/plans/session-handoff-2026-08-18d.md)
 > first.** It has the ordered next actions, what is verified and by what
 > method, and the open questions that need Ricky.
 
@@ -326,6 +334,40 @@ interchangeably. Nothing else in the build depends on which one we get.
 - Type scale is tuned for 6.86" read from ~3 feet, not for a desktop monitor.
 
 ## Lessons Learned
+- **2026-08-18 — A child's own `align-self` beats a parent's `align-items`,
+  silently.** Wrapped list rows needed their bullet top-aligned instead of
+  baseline-aligned, so `align-items: start` was added on the row. It did
+  nothing — `.tick` already carried its own `align-self: center` for the
+  single-line case, and align-self on a child always wins over align-items on
+  its parent. The bullet kept floating at the vertical center of the whole
+  two-line block. Found by Ricky on an actual photo of the glass, not by any
+  of the same-session browser-DOM overflow checks, because overflow
+  measurement doesn't catch "positioned in the wrong place but still inside
+  its box."
+  **Standing rule: when overriding alignment for a specific state, check
+  every descendant for its own conflicting `align-self` — a parent-level
+  override is invisible to a child that already set its own.** And a
+  corollary about verification: automated overflow/overlap checks and a
+  human looking at the rendered result are answering different questions;
+  neither substitutes for the other.
+- **2026-08-18 — The same layout bug hit twice in one session because the fix
+  the first time wasn't generalized.** The "All day" branch in `renderHero()`
+  originally built raw `<span>`s directly into `.meta`'s innerHTML with no
+  wrapping element. Once `.meta` became `display: flex; flex-direction:
+  column` (the meta-stacking redesign), each bare span became its own flex
+  item and therefore its own stacked line — three spans meant to read as one
+  line rendered as three. Fixed for that branch. Then, later the same
+  session, the then-column's "Free time" branch — written before the
+  meta-stacking redesign and never revisited — hit the identical bug: three
+  bare spans, three unwanted lines, `.then` grew ~33px taller than its grid
+  row and pushed all three panel columns past the footer.
+  **Standing rule: any HTML inserted into a `display: flex; flex-direction:
+  column` container must be wrapped in a single line-container element
+  (`.meta-line` here) — a bare run of siblings will each become their own
+  line, not stay on one.** When a container's display model changes (block
+  → flex column, in this case), grep for every call site that writes into
+  it, not just the one being actively edited — the fix landing in one place
+  and not propagating is exactly what happened here twice.
 - **2026-08-18 — A daemon that screenshots its own localhost page still needs
   telling to look at disk again.** The one structural decision this project
   keeps citing — "the daemon screenshots its own localhost URL" — has an

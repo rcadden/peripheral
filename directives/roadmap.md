@@ -246,6 +246,46 @@ a session does not pick one up and stall halfway.
       code silently until manually re-touched. Hardened same day:
       `reloadPaneWithRetry()` in `daemon.js` retries every 200ms (up to 6
       times) instead of dropping the reload on the first collision.
+      **Follow-up #4, same day: the physical panel photo showed every list
+      row truncating hard.** Ricky liked the equal-thirds grid aesthetically
+      and asked to fix the truncation without giving it up. Fixed without
+      touching the grid: reclaimed ~20px of unused gutter from `.agenda`'s
+      padding and the tick/gap sizing (free width, no tradeoff), and applied
+      progressive disclosure — the is-now and is-next rows now wrap to a
+      full 2-line title, everything else stays single-line and truncated.
+      **Found while verifying: the list's `is-next` class had been checking
+      `ev.id === focus.id`, a leftover from before the hero/then split, when
+      "focus" and "the next thing" were the same event.** Once `next` became
+      its own value, the list never highlighted it — the "up next" row in
+      the middle column had no matching highlight in the list at all until
+      this was caught by checking real rendered classes, not assumed correct
+      because it compiled. Fixed to check `next.id`. Dropped `MAX` from 6 to
+      5 to keep the worst case (both special rows wrapped) inside the
+      480px budget — measured with real slack (36.6px) rather than
+      calculated, per the standing rule on this file.
+      **Follow-up #5, same day: from an actual photo of the glass.** Ricky
+      sent a photo (first physical-panel look this session) and flagged the
+      tick/bullet misaligning on wrapped rows — `.tick`'s own
+      `align-self: center` (needed for the single-line case) silently beat
+      the row-level `align-items: start` override, centering the bullet on
+      the whole two-line block instead of the first line. Fixed with a
+      wrapped-row-only override. Also, three content changes: **all-day
+      entries stop showing after 10am** ("I've seen it by that point"),
+      **past events are dropped from the list entirely** (was: kept some for
+      context), and **the meta line went through three redesigns** in one
+      sitting — stacked-by-fact → dropped the calendar label entirely
+      ("obvious from the event name") → time always alone on its own line,
+      location+conference+attendees combined below it. Each redesign was
+      checked against a synthetic worst case (long location + conference +
+      attendees together) as well as live data — the first stacked version
+      overflowed `.then` by ~20px the moment all fields showed up at once,
+      caught by measurement before it shipped.
+      **Ricky, after this round: "You can look at this yourself in the
+      browser preview - it looks identical to the glass. Use this moving
+      forward to review/check your own work."** Standing permission to treat
+      the in-app browser as glass-equivalent for verification purposes going
+      forward — recorded because it changes what counts as "seen" in the
+      Step 0 gate.
 - [~] **Overlap precedence — needs real rules, not a clean shift.**
       **`NEEDS RICKY`** — the roadmap has said "wants a conversation before
       code" since it was written, and that has not happened yet.
@@ -259,13 +299,48 @@ a session does not pick one up and stall halfway.
       commitment you are *in* while a long one is a container you are *inside
       of*. See `web/panes/agenda/focus.js`, which now holds this logic and its
       full history, and `test/focus.test.js`.
-      **Still open, and still wanting a conversation before code:** duration is
-      one signal, not the ruleset below. Ricky's read: work usually takes
-      precedence, *but there are exceptions to every rule* — a kid's game beats
-      a status meeting. Candidate signals to weigh rather than a single rule:
-      calendar, whether he accepted vs. was invited, attendee count, whether
-      it is a `focusTime`/`outOfOffice` block, and duration. **Do not ship a
-      rigid work-always-wins rule.** This wants a conversation before code.
+      **The conversation happened, 2026-08-18, and it happened against real
+      data.** Instead of designing from hypotheticals, Ricky asked to pull his
+      actual calendar for the next 8 days and read real overlaps together —
+      66 timed events, 38 overlapping pairs (see the deleted scratch script;
+      it was a one-off analysis tool, not kept). Three concrete rules came
+      out of it, all shipped and tested the same day:
+      1. **A named exception, not a general rule.** "BAL-Thurs/Mon. Production
+         Meeting" is booked 60 minutes and routinely runs 30. Ricky: *"this is
+         a hard rule, you could just code it in without any other logic."*
+         `DURATION_OVERRIDES` in `focus.js` — a small, explicit, title-matched
+         list. Rewrites the event's displayed `end` outright (not just hero
+         eligibility) after Ricky flagged that the countdown was still reading
+         the real 60-minute hold: *"let's have the countdown be the 30 minute
+         timer, not the calendar hold. That's the only exception to this rule
+         currently."*
+      2. **Tiebreak changed to LATEST START**, replacing ending-soonest, for
+         when two live events are genuinely the same length: *"the newer
+         meeting [should] show up over the back half"* of the older one.
+      3. **Personal-calendar events are demoted by default and dropped if
+         unclaimed** — `resolvePersonalEvents()` in `focus.js`. Claimed by (a)
+         Ricky's name/initials in the title, or (b) a time-matching
+         work-calendar block (Ricky protects real personal commitments with a
+         placeholder on his work calendar "so that my coworkers don't book
+         meetings for me"). **A bare overlap check was tried first and was
+         wrong** — it let a 9:30am–4:50pm general-availability block
+         ("Ricky GTD") wrongly claim an unrelated practice seven hours inside
+         it. Fixed with a ~60-minute padding tolerance so only a
+         travel-time-sized match counts. Claiming only unlocks the event for
+         the *existing* duration comparison — it does not merge times or
+         remove the matched work event; a wider "adopt the work block's time
+         window" design was tried and reverted because it broke historical
+         regression tests modeling coincidental (non-deliberate) overlaps.
+      **Explicitly not settled — Ricky's own words: "this will likely take
+      consistent tweaking, both in the device logic, but also IRL the way
+      that meetings get put on this calendar."** Left `[~]` rather than
+      `[x]` for that reason. Known gap: the "work block time is priority"
+      nuance (using the wider, travel-padded work window as the *displayed*
+      time, not just the unlock signal) is designed but not built — flagged
+      to Ricky rather than guessed at. 82 tests now (was 69 at session start),
+      including the real BAL-Thurs/M2M case, the Norah's-game work-match
+      case, and the Reese-practice/"Ricky GTD" false-positive case as
+      regression tests by name.
 - [ ] **Colour-code entries by calendar** — one colour for personal, one for
       work, and possibly shades within work driven by *who is in the meeting*
       (a 1:1 with a direct report reading differently from a 40-person
