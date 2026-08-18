@@ -20,19 +20,40 @@
  *
  * Instead:
  *
- *   PUSH LOOP    fixed 1 fps. Ships whatever frame it currently has, always,
- *                without ever awaiting a render. Never blocked by anything.
- *   RENDER LOOP  independent. Replaces the current frame whenever it manages
- *                to capture one. If it stalls, the push loop keeps the panel
- *                alive with the previous frame.
+ *   PUSH LOOP    fixed 1 fps, ON ITS OWN THREAD. Ships whatever frame it
+ *                currently has, always, without ever awaiting a render.
+ *   RENDER LOOP  here, on the main thread. Replaces the current frame whenever
+ *                it manages to capture one. If it stalls, the push loop keeps
+ *                the panel alive with the previous frame.
  *
  * A stale frame on the glass is a countdown that is a few seconds behind. A
  * missed push is the vendor logo. Those are not close in cost.
+ *
+ * ── "NEVER BLOCKED BY ANYTHING" WAS FALSE UNTIL 2026-08-18 ───────────────
+ * This comment used to claim the push loop could not be blocked. It could, and
+ * on the morning of 2026-08-18 it was — for tens of seconds at a stretch —
+ * because `node-hid`'s `write()` is synchronous and `push()` issues ~81 of them
+ * in a row. Two setInterval timers on one thread are not two loops; they are
+ * one loop taking turns, and a native call that never yields takes every turn.
+ *
+ * The measurement that settled it: `/api/state`, a cached object served by
+ * `node:http`, took **36.6 seconds** to answer. Healthy it is 138ms.
+ *
+ * The transport therefore lives on a worker thread now (`hid-worker.js`), and
+ * it owns the push CADENCE, not just the writes — otherwise a blocked main
+ * thread would still stop the panel being fed and nothing would have changed.
+ * This file hands frames over and never touches the device.
+ *
+ * The separation is only worth what its health reporting is worth, which is why
+ * `PanelProxy` derives liveness from the worker's silence rather than from a
+ * flag. During the failure this daemon cheerfully logged `panel=ok
+ * renderer=down` while the truth was precisely inverted.
  */
 
 import { start as startServer, setState } from './server.js';
 import { Renderer } from './render.js';
-import { PanelTransport, KEEPALIVE_INTERVAL_MS } from './transport/hid.js';
+import { KEEPALIVE_INTERVAL_MS } from './transport/hid.js';
+import { PanelProxy } from './transport/panel-proxy.js';
 import { ApiProvider, collect } from './sources/gcal.js';
 import { StateCache } from './cache.js';
 
@@ -59,11 +80,10 @@ let providers = [];
 let currentFrame = null;
 let currentFrameAt = 0;
 
-/* Re-entrancy guards. A tick that runs long must not stack another on top of
- * itself — that turns one slow frame into an unbounded queue of them. */
+/* Re-entrancy guard. A tick that runs long must not stack another on top of
+ * itself — that turns one slow frame into an unbounded queue of them.
+ * The push loop has its own guard, on its own thread. */
 let rendering = false;
-let pushing = false;
-let reconnecting = false;
 
 let renderer = null;
 let rendererOpen = false;
@@ -72,9 +92,8 @@ let lastReopenAttempt = 0;
 let openFailures = 0;
 /** How often to retry a renderer that will not open. */
 const REOPEN_INTERVAL_MS = 30_000;
+/** @type {PanelProxy} */
 let panel = null;
-let pushed = 0;
-let pushFailures = 0;
 
 /**
  * Build calendar providers from the environment.
@@ -202,6 +221,9 @@ async function renderTick() {
     if (jpeg) {
       currentFrame = jpeg;
       currentFrameAt = Date.now();
+      // Hand it to the transport thread. Returns immediately; the worker
+      // re-pushes this frame on its own cadence until a newer one arrives.
+      panel?.setFrame(jpeg);
     } else if (renderer.consecutiveFailures >= RENDERER_REOPEN_AFTER) {
       console.warn(`[daemon] renderer failed ${renderer.consecutiveFailures}x — rebuilding`);
       try {
@@ -219,47 +241,11 @@ async function renderTick() {
   }
 }
 
-/**
- * Ship the current frame. This is the loop that must never be blocked, so it
- * does no work beyond the write itself — reconnects are fired off, not awaited.
- */
-async function pushTick() {
-  if (pushing || !panel || !currentFrame) return;
-  pushing = true;
-  try {
-    const ok = await panel.push(currentFrame);
-    if (ok) {
-      pushed++;
-    } else {
-      pushFailures++;
-      scheduleReconnect();
-    }
-  } finally {
-    pushing = false;
-  }
-}
-
-/**
- * Reopen the panel after a failed write. Deliberately not awaited by pushTick:
- * a panel that has physically vanished can take seconds to fail to open, and
- * blocking the push loop on that guarantees the logo on the way back.
- */
-function scheduleReconnect() {
-  if (reconnecting) return;
-  reconnecting = true;
-  (async () => {
-    await panel.close();
-    await new Promise((r) => setTimeout(r, panel.backoffMs));
-    const ok = await panel.open();
-    if (ok) {
-      console.log('[daemon] panel reconnected');
-    } else {
-      panel.noteReconnectFailure();
-      console.warn(`[daemon] panel reconnect failed, next try in ${panel.backoffMs}ms`);
-    }
-    reconnecting = false;
-  })();
-}
+/* The push loop and its reconnect backoff used to live here. They are now on
+ * the transport thread — see `hid-worker.js`. They were moved rather than
+ * rewritten: the logic was correct, and the reconnect backoff in particular did
+ * its job perfectly during the 2026-08-18 replug (two failed attempts at 2s and
+ * 4s, then a clean reopen). What was wrong was the thread it ran on. */
 
 async function main() {
   const { url } = await startServer();
@@ -283,7 +269,7 @@ async function main() {
 
   // Transport first: if the panel is absent we still want the browser fallback
   // running, so this is a warning rather than a fatal error.
-  panel = new PanelTransport();
+  panel = new PanelProxy();
   if (!(await panel.open())) {
     console.warn(`[daemon] panel unavailable: ${panel.lastError?.message}`);
     console.warn('[daemon] continuing — the pane URL above is the fallback');
@@ -311,19 +297,34 @@ async function main() {
   await renderTick();
 
   setInterval(renderTick, RENDER_INTERVAL_MS);
-  setInterval(pushTick, KEEPALIVE_INTERVAL_MS);
 
-  console.log(`[daemon] running — render every ${RENDER_INTERVAL_MS}ms, ` +
-              `push every ${KEEPALIVE_INTERVAL_MS}ms (independent)`);
+  console.log(`[daemon] running — render every ${RENDER_INTERVAL_MS}ms on this ` +
+              `thread, push every ${KEEPALIVE_INTERVAL_MS}ms on the transport ` +
+              `thread (genuinely independent)`);
 
-  // Heartbeat. Frame age is the number that matters: if it climbs, the renderer
-  // is stuck and the panel is showing something increasingly out of date.
+  /* Heartbeat.
+   *
+   * `loopLag` is here because on 2026-08-18 every other number on this line
+   * was reassuring while the daemon was wedged. It measures how late a 1000ms
+   * timer actually fired, which is the one figure that cannot be faked by a
+   * stale flag: if the main thread is blocked, the lag is the block. Anything
+   * above a few tens of ms means this thread is not keeping up.
+   *
+   * `panel` now reports `STALLED <n>s` as a distinct state from `down`, because
+   * the failure that ran unremarked for fifteen minutes was neither ok nor
+   * down — it was a component that had stopped answering, which had no name. */
+  let lagMark = Date.now();
+  setInterval(() => { lagMark = Date.now(); }, 1000);
+
   setInterval(() => {
     const age = currentFrame ? Math.round((Date.now() - currentFrameAt) / 1000) : null;
-    console.log(`[daemon] pushed=${pushed} failed=${pushFailures} ` +
+    const lag = Math.max(0, Date.now() - lagMark - 1000);
+    console.log(`[daemon] pushed=${panel.pushed} failed=${panel.failures} ` +
                 `frameAge=${age === null ? 'none' : age + 's'} ` +
-                `panel=${panel.healthy ? 'ok' : 'down'} ` +
-                `renderer=${renderer.healthy ? 'ok' : 'down'}`);
+                `lastPush=${panel.lastPushMs}ms loopLag=${lag}ms ` +
+                `panel=${panel.state} ` +
+                `renderer=${renderer.healthy ? 'ok' : 'down'}` +
+                `${panel.respawns ? ` respawns=${panel.respawns}` : ''}`);
   }, 30_000);
 }
 

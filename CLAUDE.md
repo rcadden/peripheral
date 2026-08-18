@@ -303,6 +303,73 @@ interchangeably. Nothing else in the build depends on which one we get.
 - Type scale is tuned for 6.86" read from ~3 feet, not for a desktop monitor.
 
 ## Lessons Learned
+- **2026-08-18 — Two loops on one thread are one loop, and a synchronous native
+  call is what proves it.** The daemon's central design is a push loop that
+  "can never be blocked by anything," documented at length at the top of
+  `daemon.js`. It is blocked by exactly one thing, and that thing is in the push
+  loop itself: **`node-hid`'s `write()` is synchronous.** `push()` fires ~81
+  blocking writes in a bare `for` loop, so a USB endpoint that stops draining
+  pins the entire process — render loop, HTTP server, source timer and all.
+  Measured: `/api/state`, a cached object served by `node:http`, **took 36.6
+  seconds** to answer, against 138ms once healthy. Process CPU was near-idle
+  throughout, because a thread blocked in the kernel burns nothing.
+  **Standing rule: separating two loops into two timers separates nothing.
+  Concurrency in Node comes from yielding, so any native binding on the hot path
+  must be proven async or moved to a worker thread — and "the docs say it
+  returns quickly" is not proof.** The rule generalises past this device: the
+  same trap is waiting in any sync native call the daemon ever adds.
+- **2026-08-18 — When one component starves, the loudest failure will be in a
+  different component.** The visible errors were five
+  `page.screenshot: Timeout 2000ms exceeded`, so the daemon dutifully tore down
+  a **completely healthy** Chromium and then could not rebuild it. Playwright's
+  timeout is measured on the same event loop that was blocked, so it fired
+  without Chromium ever being slow. Every arrow pointed at the renderer; the
+  fault was in the transport.
+  **Standing rule: a timeout is evidence about the waiting party, not the
+  awaited one.** Before acting on a component's failure count, establish that
+  the component was actually given a chance to run — and prefer a health check
+  that measures the shared resource directly (loop latency) over one that
+  accumulates per-component failure tallies. Corollary already logged elsewhere
+  in this file and violated again here: the heartbeat printed
+  `panel=ok renderer=down` when the truth was precisely inverted.
+  **Appended 2026-08-18, same day: the stall detector written to enforce this
+  rule broke it on its first run.** `PanelProxy` announced
+  `TRANSPORT STALLED — no push completed for 3s` while the worker was pushing
+  perfectly, because the *main thread* was launching Chromium and had not
+  drained the worker's messages. Worker status arrives on the main thread's
+  event loop, so "time since the last message we handled" silently conflates
+  *it stopped sending* with *we stopped listening* — the identical error, one
+  layer up, committed within the hour by someone who had just written the rule
+  down. Fixed by subtracting measured main-thread lag before attributing any
+  silence. **The practical form of the rule: any silence- or timeout-based
+  health check must first establish that the observer was awake for the
+  interval it is judging.**
+- **2026-08-18 — A failed lookup is not an absence, and reporting it as one
+  manufactures a finding.** While diagnosing the above I checked for Playwright's
+  browser process, found no `chrome.exe` outside Program Files and no
+  `headless_shell.exe`, and stated as a conclusion that Chromium had died and
+  could not relaunch. The binary is **`chrome-headless-shell.exe`**; eight were
+  running the whole time. Two wrong guesses at a name became a confident claim
+  about the world.
+  **Standing rule: when a check returns nothing, first prove the check can
+  return something.** Enumerate broadly (`ExecutablePath -like '*ms-playwright*'`
+  across all processes) before concluding a thing is missing. This is the same
+  shape as the `openBrowser()` lesson below — *verify what you actually sent
+  before blaming the other end* — and it recurred within a day, which suggests
+  the class needs watching rather than the instance.
+- **2026-08-18 — The unknown that gets answered is the one written down with a
+  reproduction.** This failure was predicted. `CHANGELOG.md` carried
+  *"Whether the push loop holds up when the PC is busy… **suspect the render and
+  push timers competing on one event loop.** Reproduce by loading the CPU and
+  watching the heartbeat deltas."* That note pointed at the right thread and the
+  right file, and made the real event legible in minutes instead of hours — even
+  though its stated mechanism was **wrong** (not timers competing; one sync call
+  blocking). A hypothesis that is close and falsifiable beat having no note at
+  all by a wide margin.
+  **Standing rule: record suspected mechanisms in Known unknowns even when
+  unsure, and always with the command that would confirm or kill them.** Then
+  when the answer arrives, mark the entry answered and say plainly which part of
+  the guess was wrong — the correction is the part with teaching value.
 - **2026-08-17 — A comment that promises a layout constraint is a claim with an
   expiry date.** `.event`'s time column carried "must hold the widest form —
   `12:30 AM`" beside a hard-coded `104px`. That number was tuned when the row

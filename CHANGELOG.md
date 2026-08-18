@@ -547,6 +547,147 @@ pushes a frame to real glass.
   2026-08-17). The in-org project is the only one. Closes the housekeeping item
   raised when its client id/secret were exposed in a chat transcript.
 
+### Changed — the hero pick moved out of the pane and got a rule that holds (2026-08-18)
+
+- **`web/panes/agenda/focus.js` (new)** — `classify()`, `pickFocus()` and
+  `selectAgenda()` extracted from `agenda.js`. Pure functions, no DOM, no fetch,
+  no clock of their own (`now` is injected), which is what makes real days
+  reproducible as tests. `agenda.js` imports it and `index.html` became
+  `<script type="module">`; both are served over http so ESM resolves.
+- **The reason for the extraction is the reason it was wrong twice.** The hero
+  pick is the one decision that determines what the panel is *for*, and it lived
+  inline with no exports, so `test/` could not reach it. Two rules shipped, each
+  derived from a single observed case, each failing on the next real overlap:
+  - *Attempt 1, start-order.* At 2:20pm a 1–3pm block and a 2:00–2:30 meeting
+    were both live; the hero went to the block — 40 minutes of runway shown
+    instead of the 10 that mattered.
+  - *Attempt 2, ending-soonest.* Fixed that case and was fit to it. At 4:10pm a
+    2:30–4:30 volleyball practice and a 4:00–4:45 meeting were both live; the
+    practice ends first, so the panel demoted the meeting he was sitting in.
+  - **Now: shortest duration wins, ending-soonest breaks ties.** Ending-soonest
+    was never the discriminator — it merely correlated with it in the first
+    case. A short, sharply-bounded event is a commitment you are *in*; a long
+    one is a container you are *inside of* ("Focus time", "Out of office",
+    a two-hour practice). Containers are context, not focus.
+- **`test/focus.test.js` (new)** — 13 tests, and every case is a real day rather
+  than a hypothetical, including both failures above by date and time.
+- All-day events remain excluded from the hero, with the reasoning carried into
+  `focus.js` rather than left behind in the pane.
+
+### Fixed — the transport moved off the main thread (2026-08-18)
+
+Addresses the incident recorded under *Diagnosed* below, which was written
+before the fix existed and is left as-is.
+
+- **`src/transport/hid-worker.js` (new) — the push loop runs on a worker
+  thread**, and owns the push *cadence*, not merely the writes. The main thread
+  sends a frame only when the renderer produces a new one; the worker re-pushes
+  whatever it holds at 1 fps on its own timer. **That distinction is the fix.**
+  Had the interval stayed on the main thread, a blocked main thread would still
+  have starved the panel — the writes would have moved and the coupling would
+  have remained.
+- **`src/transport/panel-proxy.js` (new) — the main-thread handle**, whose real
+  job is honest health. Liveness is derived from the worker's **silence** rather
+  than from a flag, because a flag reports the last thing a component was
+  observed to be and the failure was precisely a component that had stopped
+  answering. Adds `panel=STALLED <n>s` as a state distinct from `ok`/`down`,
+  a slow-push detector on the worker side (three pushes ≥ the panel's ~3s forget
+  window drops the handle and reopens), and a worker respawn after 60s of
+  attributable silence.
+- **`src/transport/hid.js` is unchanged.** All wire logic, the handshake, the
+  frame header and the reconnect backoff were correct — the backoff proved it
+  during the replug — and were moved rather than rewritten. `idle-test.js` and
+  `send.js` still use `PanelTransport` directly, which is right: they are
+  one-shot diagnostics where blocking the caller is the desired behaviour.
+- **`src/daemon.js` heartbeat now reports `loopLag`** — how late a 1000ms timer
+  actually fired. It is the only figure on that line a stale flag cannot fake,
+  and its absence is why every health signal read green during the incident.
+- **`open()` is bounded (10s).** Device enumeration and the handshake both block
+  on the worker thread; an unbounded await would have let a hung transport stop
+  `main()` before it reached the renderer — the transport taking down the
+  daemon, which is the exact failure the redesign exists to prevent.
+- **`test/panel-proxy.test.js` (new) — 18 tests**, no hardware, no sleeps, `now`
+  always injected. The stall decision is extracted as pure functions for the
+  reason `focus.js` was: logic `test/` cannot reach gets to be wrong twice
+  first. Suite: **69 pass, 0 fail.**
+- **A false positive, caught on the first real run and fixed.** The detector
+  logged `TRANSPORT STALLED — no push completed for 3s` while the worker was
+  pushing perfectly, because the **main thread** was busy launching Chromium and
+  had not drained the worker's messages. Worker status arrives on the main
+  thread's event loop, so "time since the last message we handled" conflates
+  *the worker stopped sending* with *we stopped listening*. `stallState()` now
+  subtracts `mainLagMs` — how late the proxy's own watchdog fired — so silence
+  during a blocked main thread is not held against the worker. Four tests pin
+  it, including the inverse case: **lag must not become an excuse that masks a
+  genuinely stalled worker.**
+  - Worth recording plainly: **the detector written in response to this incident
+    reproduced the incident's own bug on its first run.** A timeout measured on
+    a blocked loop is evidence about the waiter, not the awaited — the same
+    error that got a healthy Chromium torn down. The class is easy to re-enter.
+- **Verification.** Two clean daemon starts, the second with `chrome-headless-shell`
+  killed first so the Chromium launch was genuinely cold — the condition that
+  produced the false positive. Four heartbeats at **30/30/27/30 pushes**,
+  `lastPush` 34–200ms, `loopLag=0ms`, `panel=ok`, stderr empty.
+  **NOT YET VERIFIED: eyes on the glass.** Every number above is a metric, and
+  this project's own standing rule says metrics are not evidence that pixels
+  changed. See Known unknowns.
+
+### Diagnosed, not yet fixed (2026-08-18)
+
+- **The two "independent" loops are not independent, and the mechanism is now
+  measured.** First morning of real unattended use after a reboot. Ricky
+  reported the panel reverting to the vendor logo repeatedly since logon —
+  behaviour it had not shown the day before.
+  - **Root cause: `node-hid`'s `write()` is synchronous.** `PanelTransport.push()`
+    (`src/transport/hid.js:310`) issues ~81 blocking 512-byte writes in a bare
+    `for` loop with nothing to yield on. When the USB endpoint stops draining,
+    each call blocks *inside the driver*, and the whole batch pins the single
+    Node thread for tens of seconds.
+  - **The measurement that settles it:** a request to the daemon's own
+    `/api/state` — a `node:http` handler returning a cached object, normally
+    sub-millisecond — **took 36.6 seconds**. After the fix below it measured
+    **138ms**. Process CPU was ~17s across 14 minutes of wall clock, i.e.
+    near-idle: the thread was not computing, it was waiting in the kernel.
+  - **Observed push rate: 413 → 417 → 421 → 422 across four 30-second
+    heartbeats** — roughly one frame per 30s against a target of 30. The panel's
+    forget window is ~3s, so it sat on its logo ~90% of the time. This is the
+    user-visible symptom, and it is the predicted one.
+  - **The renderer failures were collateral, not causal.** The five
+    `page.screenshot: Timeout 2000ms exceeded` errors were Playwright's own
+    timers expiring on the blocked loop; Chromium was healthy throughout. The
+    daemon nonetheless hit `RENDERER_REOPEN_AFTER` and tore down a working
+    browser, then could not rebuild it because the loop never yielded. **A
+    starvation symptom was treated as a renderer fault.**
+  - **The health output was actively misleading.** The heartbeat read
+    `panel=ok renderer=down` while the truth was the exact inverse. This is the
+    existing "a dead daemon must LOOK dead" rule failing one layer up — the
+    daemon was neither dead nor working, and nothing it reported said so.
+  - **Recovery required physically replugging the USB-C.** Nothing in the daemon
+    could clear a stalled endpoint from inside the blocked thread. On replug the
+    reconnect backoff worked exactly as designed — two failed attempts at 2s and
+    4s, then `[hid] open — PM=128 SUB=1`, `[daemon] panel reconnected`, and the
+    rate returned to 29 pushes per heartbeat with `frameAge` 0–1s. **Same
+    process throughout (PID 22992); no restart.** The 8 permanent `failed=`
+    writes are the record of the unplugged interval.
+  - **Correction, same session:** while diagnosing, it was stated as a finding
+    that Playwright's Chromium had died and could not relaunch. That was wrong.
+    The process check filtered for `chrome.exe` and then `headless_shell.exe`;
+    the actual binary is **`chrome-headless-shell.exe`**, and 8 of them were
+    running the whole time. A failed lookup was reported as an absence. The root
+    cause above rests on the latency and CPU measurements, not on that claim,
+    and is unaffected.
+  - **Fix not yet applied.** The transport belongs in a `worker_thread` so a
+    blocking write costs one thread instead of the process. Two smaller items
+    fall out of it: the heartbeat should time each push and report a stall
+    directly rather than inferring health from flags, and the renderer's
+    5-failure rebuild must not fire when the failures are timeouts on a starved
+    loop.
+- **Panel disconnect event — 2026-08-18, day 2.** Logged per the hardware-risk
+  policy at the bottom of this file. Preceded by the previous evening's daemon
+  exit with code **1073807364 = `0xC0000374` STATUS_HEAP_CORRUPTION**, a native
+  crash consistent with `node-hid`. Cleared by a replug; cable is the usual
+  culprit on this model. First entry on the failure curve.
+
 ### Known unknowns
 - ~~**Whether Balcom permits third-party OAuth app access.**~~ **ANSWERED
   2026-08-17: no for third-party, yes for internal.** A personal-project client
@@ -559,10 +700,21 @@ pushes a frame to real glass.
   full titles. Three defects surfaced immediately and are fixed — see above.
   The fixtures did their job on the transform and were silent on everything
   real data does differently, which is the honest limit of a fixture.
-- **Whether the token survives long-term.** The refresh path has never run —
-  the access token is under an hour old. Internal apps have no 7-day expiry,
-  but that is documentation, not observation. First real test is tomorrow
-  morning.
+- ~~**Whether the token survives long-term.**~~ **ANSWERED 2026-08-18: it
+  survives, and the refresh path works unattended.** First cold logon after the
+  token was issued. `tokens.json` was rewritten at **07:11:46**, five seconds
+  after the daemon started at 07:11:41 — the refresh executing and persisting a
+  new access token with nobody watching. The panel showed the correct date for
+  today, and `/api/state` reports `stale: false` with 12 live events. Internal
+  apps having no 7-day expiry is now observation rather than documentation, at
+  least across one night. Note this was **verified by the daemon's own logon
+  run**, which is the only way it could have been.
+  - Unrelated to the token: the same log carries
+    `gcal:work: every calendar failed — fetch failed` and a `serving last good
+    (463s old)` warning. Those land squarely inside the blocked-loop window
+    above and are **collateral from the stall, not a calendar or auth fault** —
+    the source timer, like every other timer, was starved. Recorded so a future
+    reader does not go hunting for an OAuth problem that never existed.
 - **Whether an all-day event now behaves correctly on the panel.** The
   hero-hijack fix has still never been exercised by real data: the only all-day
   event the account produced was a `workingLocation` entry, which is now
@@ -571,25 +723,56 @@ pushes a frame to real glass.
   events on the day it was wired up — 15 work, 3 personal, 0 travel — so that
   calendar's label and tint have never appeared. Not a suspected defect, a
   blind spot: nothing has disproved it either.
-- **Whether the push-rate shortfall matters.** Ricky reports **no flicker in
-  normal use** (2026-08-17, on the glass), which is the only evidence that can
-  settle the user-facing question, and it settles it in the good direction.
-  Left open anyway because the *mechanism* is unexamined — the render and push
-  timers share one event loop, which is precisely the coupling the two-loop
-  design was meant to eliminate. A quiet panel today does not prove a quiet
-  panel during a Teams call and a build.
-- **Whether the push loop holds up when the PC is busy.** Undisturbed, the
-  daemon pushes **28–30 frames per 30s heartbeat with 0 failures** (100s run).
-  But during this session's own testing — several concurrent PowerShell and npm
-  processes — the same heartbeats read **19, 25 and 15 pushes**, with four
-  2-second screenshot timeouts and a `frameAge` of 3s. Fifteen pushes in thirty
-  seconds means up to 2s between frames, which is inside the panel's ~3s
-  forget window; that is visible flicker, and the machine this runs on will not
-  be idle. Not diagnosed further this session. **Suspect the render and push
-  timers competing on one event loop** — the two loops are logically
-  independent but share a thread, which is exactly the coupling the two-loop
-  design was meant to remove. Reproduce by loading the CPU and watching the
-  heartbeat deltas.
+- ~~**Whether the push-rate shortfall matters.**~~ **ANSWERED 2026-08-18: yes,
+  and worse than flicker.** Ricky's "no flicker in normal use" (2026-08-17, on
+  the glass) was true and remains the correct read of that day; it was simply
+  not a busy morning. The unexamined mechanism was the real finding — see
+  *Diagnosed, not yet fixed* above. Superseded text kept below.
+  > Ricky reports **no flicker in normal use** (2026-08-17, on the glass), which
+  > is the only evidence that can settle the user-facing question, and it
+  > settles it in the good direction. Left open anyway because the *mechanism*
+  > is unexamined — the render and push timers share one event loop, which is
+  > precisely the coupling the two-loop design was meant to eliminate. A quiet
+  > panel today does not prove a quiet panel during a Teams call and a build.
+- ~~**Whether the push loop holds up when the PC is busy.**~~ **ANSWERED
+  2026-08-18: it does not, and the suspected mechanism was close but wrong.**
+  The suspicion recorded here — "render and push timers competing on one event
+  loop" — pointed at the right file and the right thread, and the reproduction
+  instruction (load the CPU, watch the heartbeat deltas) is what made the
+  failure legible when it arrived on its own. But the cause is not two timers
+  competing for a busy loop. **It is one synchronous native call blocking the
+  loop outright**, which no amount of timer scheduling can mitigate and which
+  CPU load only makes more likely to be noticed. Full evidence in *Diagnosed,
+  not yet fixed* above. Superseded text kept below.
+  > Undisturbed, the daemon pushes **28–30 frames per 30s heartbeat with 0
+  > failures** (100s run). But during this session's own testing — several
+  > concurrent PowerShell and npm processes — the same heartbeats read **19, 25
+  > and 15 pushes**, with four 2-second screenshot timeouts and a `frameAge` of
+  > 3s. Fifteen pushes in thirty seconds means up to 2s between frames, which is
+  > inside the panel's ~3s forget window; that is visible flicker, and the
+  > machine this runs on will not be idle. Not diagnosed further this session.
+  > **Suspect the render and push timers competing on one event loop** — the two
+  > loops are logically independent but share a thread, which is exactly the
+  > coupling the two-loop design was meant to remove. Reproduce by loading the
+  > CPU and watching the heartbeat deltas.
+- ~~**Whether the worker-thread transport actually keeps the panel lit.**~~
+  **ANSWERED 2026-08-18: yes — "the screen is holding strong" (Ricky, on the
+  glass).** The metrics said so first — five heartbeats across two starts at
+  30/30/27/30/27 pushes, `loopLag=0ms`, `failed=0`, stderr empty — but this
+  project's rule is that metrics are not evidence pixels changed, and the
+  sustained observation is what closes it. Note the contrast with the morning:
+  the *same* heartbeat format reported `panel=ok` throughout a total outage.
+  What makes today's numbers trustworthy is not the numbers, it is that a human
+  looked.
+  - Still unobserved, deliberately not folded into this answer: whether the
+    panel holds during a genuinely busy machine — a Teams call and a build —
+    which is the harder half of the original question and needs a loaded PC
+    rather than a quiet one.
+- **Whether the respawn path works, and whether `terminate()` can interrupt a
+  blocked native call.** Written, never executed — no stall has occurred since
+  the fix landed, which is the point but leaves the recovery branch untested on
+  hardware. Documented in `panel-proxy.js` as an honest caveat rather than a
+  guarantee: a truly wedged endpoint may still need a replug.
 - **Whether the live panel still looks right.** The daemon was verified this
   session by metrics again — 30 pushes, 0 failures, under the logon task — and
   the pane was verified through the real renderer as a JPEG. **Neither is eyes
@@ -628,3 +811,16 @@ one-star, and a recurring pattern of flicker-then-permanent-death at 1–8 weeks
 The renderer is decoupled from the transport specifically so that a dead panel
 costs a screen, not the project. Log failures here when they happen — the dates
 matter for judging the failure curve.
+
+### Failure log
+
+| Date | Age | Event | Cleared by |
+|---|---|---|---|
+| 2026-08-17 ~18:07 | day 1 | Daemon exited **1073807364** (`0xC0000374`, STATUS_HEAP_CORRUPTION) — a native crash, consistent with `node-hid`. | Machine shut down for the night. |
+| 2026-08-18 07:16–07:31 | day 2 | USB endpoint stopped draining after a cold boot. Synchronous HID writes blocked the daemon's thread for ~30s at a time; panel on the vendor logo ~90% of the time. | **Physical replug of the USB-C.** Daemon self-recovered, no restart. |
+
+Two events in two days is early on the curve, and both are consistent with the
+cable — the failure point the reviews name most often. Neither is yet evidence
+of a dying unit. **If a third arrives, replace the cable before concluding
+anything about the panel.** The decoupled-transport decision is looking
+correct sooner than hoped.
