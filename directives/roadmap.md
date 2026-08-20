@@ -586,19 +586,27 @@ unchanged. Any earlier reference to "Sprint 3 — Polish and release" means this
       already worked. `palette-overrides.json` exists so a *future* call to
       `regenerate()` can still honor the choice, not because today's boot
       sequence reads it.
-- [~] **`README` rewritten — 2026-08-20, text complete, real photo still
-      needed.** Replaced the 2026-08-17/18 version (written before hardware
-      even arrived, setup section literally said "not yet documented") with
-      the actual current state: real OAuth setup, weather, calendar colors,
-      the colour picker, `npm run setup`. **Left `[~]` rather than `[x]`
-      because the roadmap's own wording is "with photos"** — the README has
-      a clearly marked placeholder (`<!-- TODO -->` comment, commented-out
-      `<img>` tag) rather than a real shot of the panel on a real desk
-      showing a real day. `docs/first-light.jpg` exists (the very first
-      frame push, 2026-08-17) but is a calibration test pattern, not the
-      product — using it as the README's hero image would be misleading for
-      a public repo. Needs Ricky to take an actual photo; `docs/**/*.jpg` is
-      already exempted from `.gitignore` for exactly this.
+- [x] **`README` rewritten and photo added — DONE 2026-08-20.** Replaced the
+      2026-08-17/18 version (written before hardware even arrived, setup
+      section literally said "not yet documented") with the actual current
+      state: real OAuth setup, weather, calendar colors, the colour picker,
+      `npm run setup`. **Photo is a live capture of the agenda pane, not yet
+      a camera photo of the physical glass** — same capture method the
+      daemon itself uses (a separate, one-off Playwright instance, not the
+      daemon's own live `Renderer`), against real calendar/weather data.
+      **Privacy pass before it went in the README:** Ricky reviewed the raw
+      capture first and asked for three regions blurred — the middle
+      "up next" column's title and two agenda-list rows referencing the same
+      recurring meeting series, all sharing a client name in the title.
+      Iterated three times to get the blur boxes right: first pass clipped
+      into the visible timestamps ("3:3" instead of "3:30p"), second pass
+      left a legible sliver of the wrapped second line uncovered — both
+      fixed by cropping and re-measuring exact pixel bounds rather than
+      eyeballing from the full-size image. Final version sent back to Ricky
+      for confirmation before being committed. `docs/first-light.jpg` (the
+      very first frame push, 2026-08-17) stays a separate historical
+      artifact — a calibration test pattern, not the product, so it was
+      never a candidate for the README's hero image.
 - [x] **One-command setup — DONE 2026-08-20.** New `npm run setup`
       (`scripts/setup.js`) does everything that's actually scriptable:
       creates `.env` from `.env.example` if missing, regenerates the palette

@@ -7,11 +7,14 @@ actually next — with a live countdown — on a 1280×480 screen sitting on you
 desk. No cloud, no account beyond your own Google Calendar, no telemetry.
 Your calendar token never leaves the machine.
 
-<!-- TODO: replace with a real photo of the panel on a real desk, showing a
-     real day — not a synthetic screenshot. docs/**/*.jpg is exempted from
-     .gitignore for exactly this. Suggested caption once added:
-     "The panel on my desk, mid-afternoon." -->
-<!-- ![Peripheral running on a real desk](docs/panel-photo.jpg) -->
+![Peripheral's agenda pane, rendered live against a real day](docs/panel-photo.jpg)
+
+*The agenda pane, captured the same way the daemon captures it for the
+physical panel — real calendar and weather data, three meeting titles
+blurred at Ricky's request before this went in the README (nothing else
+about the layout or data is altered). Not yet a photo of the physical glass
+on a desk; if that ever replaces this, `docs/**/*.jpg` is already exempted
+from `.gitignore` for it.*
 
 > Status: **working, daily driver.** Real calendar (work + personal, merged
 > server-side), live weather, colour-coded by calendar, running unattended
