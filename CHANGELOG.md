@@ -1167,7 +1167,20 @@ Committed as `ecb5c52`, pushed `dev`.
 
 ~~**Roadmap correction found while closing this out:** the 2026-08-18 roadmap text asked for weather as **a separate pane** — the "proof pane" that pane cycling would cycle to. What got built instead is weather folded into the agenda pane's own top bar, always visible, not a standalone pane. Functionally this still answers the roadmap's underlying question (can the panel show more than the calendar, cheaply, with no new auth) — but it does **not** give Sprint 3's other item, pane cycling, anything to cycle to. Left as `[~]` in `directives/roadmap.md` rather than `[x]`, flagged `NEEDS RICKY`: does bar-embedded weather replace the need for a weather *pane*, or does cycling still want a second pane and, if so, what should it be? The sprint's closing condition ("cycles between agenda and weather") is written against a pane that doesn't exist and needs rewriting once that's answered.~~
 
-**ANSWERED 2026-08-20, same-session follow-up.** Ricky: *"having the weather in the header replaces the need for a weather pane."* Weather is decided, not provisionally accepted, as a bar feature — it will not become a cyclable pane. `directives/roadmap.md`'s weather item flipped to `[x]`. Sprint 3's closing condition rewritten: the panel now needs to cycle between agenda and **some other real pane**, not weather — candidate pulled from Sprint 4's list (tomorrow's-first-event, inbox, or photos), not yet chosen. Pane cycling infrastructure itself remains completely unbuilt.
+**ANSWERED 2026-08-20, same-session follow-up.** Ricky: *"having the weather in the header replaces the need for a weather pane."* Weather is decided, not provisionally accepted, as a bar feature — it will not become a cyclable pane. `directives/roadmap.md`'s weather item flipped to `[x]`.
+
+### Changed — Sprints 3 and 4 closed as NOT PURSUING (2026-08-20)
+
+Immediately following the weather decision above, Ricky went further: *"I don't know that adding a second pane does much for me in terms of value — the calendar/meetings pane is super useful as-is."* This isn't a scheduling deferral — it's a judgement that the multi-pane premise itself doesn't earn its keep against the one pane that already works well.
+
+**Sprint 3 — the multi-pane system** and **Sprint 4 — more panes** are both marked NOT PURSUING in `directives/roadmap.md`. Nothing deleted, per the no-tidying rule — every item struck through in place with the reasoning attached. Concretely:
+
+- **Pane cycling** (`render.js`'s unused `goto()`, per-pane dwell times) will not be built. The design constraints that were already settled (push loop unaffected by the renderer, never blank between panes) are kept in the struck-through item in case a genuinely compelling pane shows up later and this gets revisited.
+- **Inbox pane and photos pane** — both premised on cycling existing to show them. Without cycling there's no ambient way to surface a second pane, so both fall with it. Photos pane's Google Photos API policy question was never even checked — this idea never got past "worth investigating."
+- **"Tomorrow's first event"** survives, moved to Future Explorations, reframed: it was already noted as "arguably belongs in the agenda pane rather than a pane of its own," and that framing turns out to be exactly right — it needs a change to what the existing pane shows at 5pm, not a new pane or cycling infrastructure. Still buildable any session.
+- **Future Explorations' four pane-dependent ideas** (touch input, now-playing, n8n status, Claude usage, DND takeover) are not cancelled but are honestly parked lower — they were written assuming a pane system that no longer exists as a plan.
+
+The project's shape going forward: **one pane, made richer, not several panes cycled between.** Weather in the bar is the model for how new capability gets added — as a bar or column addition to the existing agenda pane — rather than as a standalone pane.
 
 ## Decisions worth not relitigating
 

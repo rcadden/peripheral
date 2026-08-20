@@ -64,15 +64,20 @@ moved from 3 to **5**. A mapping table for the dead labels is at the top of
 `directives/roadmap.md`, along with a **Standing watch** list of things that
 cannot be closed by working on them. See the handoff.
 
-**Sprint 3 opened 2026-08-19/20 with weather, but it landed sideways.**
-`NwsProvider` (free, keyless NWS API, hardcoded to Ricky's real address) is
-built, wired into the daemon on its own cadence, and **confirmed on the glass
-2026-08-20** ("looks good"). But it shipped as a redesigned three-panel top
-bar on the *existing* agenda pane, not as the separate weather pane the
-roadmap asked for — so it answers "can the panel show more than the
-calendar" without giving Sprint 3's other item, pane cycling, anything to
-cycle to. Left `[~]` in the roadmap, `NEEDS RICKY`. Pane cycling itself is
-untouched. See the handoff.
+**Sprint 3 opened 2026-08-19/20 with weather — then Sprints 3 and 4 both
+closed as NOT PURSUING, same day.** `NwsProvider` (free, keyless NWS API,
+hardcoded to Ricky's real address) shipped as a redesigned three-panel top
+bar on the *existing* agenda pane, confirmed on the glass ("looks good"),
+and Ricky decided that was the right shape, not a compromise: *"having the
+weather in the header replaces the need for a weather pane."* Followed
+immediately by the bigger call: *"I don't know that adding a second pane
+does much for me in terms of value — the calendar/meetings pane is super
+useful as-is."* **The multi-pane system (Sprint 3's pane cycling, all of
+Sprint 4) is not being built.** Not deleted from the roadmap — struck
+through and dated per the no-tidying rule — but the project's shape going
+forward is one pane, richer, not several panes cycled between. "Tomorrow's
+first event" survives as a Future Exploration, reframed as an agenda-pane
+addition rather than a new pane, since it never needed cycling anyway.
 
 <!-- Superseded 2026-08-17, kept per the no-tidying rule: -->
 <details><summary>Previous status (pre-OAuth)</summary>

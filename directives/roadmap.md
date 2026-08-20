@@ -430,22 +430,28 @@ rather than designed upfront and shipped once.
       meeting did. Confirmed in a JPEG captured through `src/render.js`, so it
       is verified at the Rendered tier rather than only tested.
 
-## Sprint 3 — The multi-pane system
+## Sprint 3 — The multi-pane system — **NOT PURSUING, decided 2026-08-20**
 
-**The question: can the panel show more than one thing?**
+**The question was: can the panel show more than one thing? Ricky's answer,
+after weather landed in the bar instead of as a pane: the question doesn't
+need asking.** *"I don't know that adding a second pane does much for me in
+terms of value — the calendar/meetings pane is super useful as-is."* This
+isn't a blocked item or a deferred one — it's a judgement that the whole
+premise of this sprint doesn't earn its keep against the one pane that
+already works. Kept per the no-tidying rule rather than deleted.
 
 *Was the first half of "Sprint 2 — More of life → New panes".*
 
-- [ ] **Pane cycling with per-pane dwell times.** The infrastructure: which pane
-      is showing, how long each holds, and how the renderer switches without the
-      push loop ever noticing. `render.js` already has `goto()` for exactly
-      this, unused so far.
-      Constraints that are already settled and must not be re-litigated: the
-      push loop runs at 1 fps on the transport thread regardless of what the
-      renderer is doing, and the panel forgets after ~3s — **a pane switch must
-      never cost a frame.** If a `goto()` plus font settle takes longer than the
-      forget window, the previous pane's frame keeps shipping until the new one
-      is ready. Never blank between panes.
+- [ ] ~~**Pane cycling with per-pane dwell times.**~~ **NOT BUILDING, per the
+      2026-08-20 decision above.** The infrastructure was never started —
+      `render.js`'s `goto()` sits unused for this purpose (it does other work
+      now, see 2026-08-18's pane-reload fix). If a genuinely compelling
+      second pane shows up later, this is where the constraints that were
+      already settled and should still hold live: the push loop runs at 1 fps
+      on the transport thread regardless of what the renderer is doing, the
+      panel forgets after ~3s, and **a pane switch must never cost a frame** —
+      if a `goto()` plus font settle takes longer than the forget window, the
+      previous pane's frame keeps shipping until the new one is ready.
 - [x] **Weather — built 2026-08-19, shipped in the bar rather than as a
       separate pane, and Ricky decided 2026-08-20 that's the right shape,
       not a compromise.** *"Having the weather in the header replaces the
@@ -468,46 +474,33 @@ rather than designed upfront and shipped once.
       Weather is not, and will not become, a cyclable pane. `focus.js` and
       the cycling infrastructure below should not plan around it as one.
 
-**Closing condition — rewritten 2026-08-20, the original is struck through per
-the no-tidying rule:** ~~the panel cycles between agenda and weather,
-unattended, across a logon, with no blank frame at the switch and no flicker
-on the glass.~~ Weather is decided out of the running as a pane, so cycling
-needs a genuinely different second pane to prove itself against — pull one
-forward from Sprint 4 (tomorrow's-first-event is the smallest; see below) or
-build a purpose-made proof pane. **New closing condition: the panel cycles
-between agenda and one other real pane, unattended, across a logon, with no
-blank frame at the switch and no flicker on the glass.** Which second pane is
-still open — see Sprint 4.
+**Closing condition — struck through 2026-08-20, per the no-tidying rule, not
+deleted:** ~~the panel cycles between agenda and weather, unattended, across
+a logon, with no blank frame at the switch and no flicker on the glass.~~
+There is no closing condition now because the sprint isn't being pursued —
+see above.
 
-## Sprint 4 — More panes
+## Sprint 4 — More panes — **NOT PURSUING, same 2026-08-20 decision**
 
-**The question: what else earns a pane?**
+**The question was: what else earns a pane? Folded into the Sprint 3
+decision above** — if a second pane isn't worth cycling to, "what else earns
+a pane" doesn't have anywhere to land either. Kept per the no-tidying rule.
 
 *Was the second half of "Sprint 2 — More of life → New panes".*
 
-**One of these is now also Sprint 3's cycling target, decided 2026-08-20 when
-weather was confirmed to be staying in the bar rather than becoming a pane.**
-Whichever of the three below gets built first is the natural candidate —
-"Tomorrow's first event" is the smallest and could plausibly be built
-alongside pane cycling in one session rather than after it. Not yet decided
-which; flag when picking this up.
-
-Each of these is roughly one session and they are independent — order them by
-what Ricky actually wants to see, not by this list.
-
-- [ ] **Tomorrow's first event when today is done.** The smallest and probably
-      the most valuable: the agenda currently reads "Nothing left today", which
-      is true and unhelpful at 5pm. Arguably belongs in the agenda pane rather
-      than a pane of its own — decide when building it.
-- [ ] **Inbox pane** — unread count and top senders, **no message bodies on
-      screen.** This thing sits in a room; the constraint is not negotiable.
-      Needs a new OAuth scope (Gmail readonly) against the same internal-app
-      client, which is the part to verify first.
-- [ ] **Photos pane — research spike BEFORE it is a build item.** Google
-      restricted the Photos Library API; broad album read may no longer be
-      available to third-party apps. **Confirm current policy before designing
-      anything.** Fallbacks: Picker API session, or a synced local/Drive folder
-      — the local folder needs no API at all and may simply be the answer.
+- [ ] ~~**Tomorrow's first event when today is done.**~~ **Still possibly
+      worth doing, but reframed** — this was already flagged as "arguably
+      belongs in the agenda pane rather than a pane of its own," and that
+      framing survives the sprint being shelved: it doesn't need cycling or
+      a new pane, just a change to what the agenda pane shows at 5pm when
+      today is done. Moved to **Future Explorations** below as an agenda-pane
+      enhancement, not a Sprint 4 item.
+- [ ] ~~**Inbox pane**~~ — unread count and top senders, no message bodies.
+      Premised on cycling existing to show it; without cycling there's no
+      ambient way to surface a second pane at all. Not pursuing.
+- [ ] ~~**Photos pane**~~ — same reasoning, not pursuing. Google's Photos
+      Library API restrictions were never even checked, so this was never
+      more than an idea.
 
 ## Sprint 5 — Polish and release
 
@@ -537,6 +530,11 @@ unchanged. Any earlier reference to "Sprint 3 — Polish and release" means this
 - [ ] Second panel support (the 9.16" 1920×480 sibling is the same family)
 
 ## Future Explorations
+- **Tomorrow's first event when today is done — moved here 2026-08-20** from
+  the shelved Sprint 4. Doesn't need the multi-pane system or cycling: it's a
+  change to what the existing agenda pane shows at 5pm ("Nothing left today"
+  is true and unhelpful), not a new pane. Genuinely buildable any session,
+  independent of the pane-system items below.
 - Touch input — the 6.86" is not a touchscreen, but the 8.8" class is. Would
   make tap-to-join-Meet possible.
 - Now-playing pane (Spotify MCP already authorised in the workspace)
@@ -544,3 +542,9 @@ unchanged. Any earlier reference to "Sprint 3 — Polish and release" means this
 - Claude usage pane — the origin of the idea, and the one thing Ricky wanted
   least. Cheap to add once the pane system exists.
 - Do-not-disturb takeover: full-bleed "IN A MEETING" when an event is live
+- **Note added 2026-08-20: the four items above (touch input, now-playing,
+  n8n status, Claude usage, DND takeover) all assume a pane system that
+  Sprints 3–4 decided not to build** — *"the calendar/meetings pane is super
+  useful as-is."* None of them are cancelled — they're honest explorations,
+  parked lower than they were, not measured against a mechanism that doesn't
+  exist. Revisit if the multi-pane decision itself is ever revisited.
