@@ -633,13 +633,27 @@ unchanged. Any earlier reference to "Sprint 3 — Polish and release" means this
       later. Dated Lessons Learned entry in `CLAUDE.md` generalizes the
       rule: never echo a secrets-bearing file's contents for verification,
       even against a template, even when "just testing a script."
-- [ ] Second panel support (the 9.16" 1920×480 sibling is the same family)
+- [ ] ~~Second panel support (the 9.16" 1920×480 sibling is the same family)~~
+      **DROPPED 2026-08-20 — Ricky doesn't own the hardware.** *"That's still
+      pending a purchase."* Earlier the same day Ricky had explicitly kept
+      this in scope when turning down a proposal to trim it (see the
+      superseded note below) — surfaced back to him rather than silently
+      dropped on the strength of that earlier call, and he confirmed
+      dropping it now, on the different and better grounds that it can't
+      actually be verified against real hardware yet. Not deleted, struck
+      through per the no-tidying rule; revisit if the second panel is ever
+      bought.
 - [ ] **Public repo, MIT — LAST, on purpose.** Ricky, 2026-08-20, after a
       proposal to trim scope and flip public early was turned down: *"first I
       want to finish the items in the roadmap, then we can do all of this as
-      the last/final step."* Full scope stays — colour picker and second
-      panel support are not being deferred past the public flip. The
-      full-history secret scan already run 2026-08-20 came back clean
+      the last/final step."* ~~Full scope stays — colour picker and second
+      panel support are not being deferred past the public flip.~~
+      **Superseded same day:** second panel support dropped for a genuine
+      reason (no hardware to test against), not deferred — see above. Colour
+      picker, README, and one-command setup all shipped in full, so this
+      sprint still closes with everything actually buildable done before the
+      public flip, which was the substance of Ricky's original instruction.
+      The full-history secret scan already run 2026-08-20 came back clean
       (`.env` never committed, no OAuth client secrets or refresh tokens
       anywhere in git history) — worth re-running once more immediately
       before the actual flip, since more commits will land between now and

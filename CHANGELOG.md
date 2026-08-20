@@ -1234,6 +1234,10 @@ Left as a placeholder above; filled in the same session. Captured with a one-off
 
 **Privacy pass before anything went near the repo, at Ricky's explicit request.** The raw capture was sent to him first, not committed — he asked for three regions blurred: the "up next" column's title and two agenda-list rows, all referencing the same recurring client-named meeting series. Iterated three times to land the blur boxes correctly: the first pass clipped into the visible timestamps ("3:3" instead of "3:30p"), the second left a legible sliver of a wrapped second line uncovered below the blur box. Both fixed by cropping narrow reference strips and measuring exact pixel bounds rather than eyeballing the full 1280×480 image — the same "measure, don't guess" discipline this file's layout-bug lessons already established, applied to image redaction instead of CSS. Final version sent back to Ricky for confirmation ("looks clear, go ahead and use it") before being copied into `docs/panel-photo.jpg` and committed. `directives/roadmap.md`'s README item flipped to `[x]`.
 
+### Changed — second panel support dropped from Sprint 5 (2026-08-20)
+
+Ricky: *"that's still pending a purchase — and you had talked me out of needing it anyways, so you can remove that."* The second half wasn't quite accurate — earlier the same session a proposal to trim Sprint 5's scope (including this item) was explicitly turned down, not accepted — so that was surfaced back to him rather than silently agreed with. He confirmed dropping it anyway, on the actually-applicable grounds: he doesn't own the 9.16"/1920×480 hardware yet, so it can't be built against anything real. Struck through in `directives/roadmap.md`, not deleted. Sprint 5's remaining scope is now just the public-repo flip, with colour picker, README, and one-command setup already shipped in full — which was the substance of the earlier "finish everything first" instruction even though this one item's fate changed.
+
 ## Decisions worth not relitigating
 
 Recorded here so they survive a cold start. Full reasoning lives in `CLAUDE.md`.
