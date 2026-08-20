@@ -1,0 +1,96 @@
+/* Colour picker — a normal (scrollable, variable-width) settings page, not a
+   fixed 1280x480 pane. Shares tokens.css for its own chrome so it feels like
+   part of the same product, but nothing here is ever screenshotted. */
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html, body {
+  min-height: 100%;
+  background: var(--ground);
+}
+
+body {
+  font-family: var(--font-mono);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+  padding: 40px;
+}
+
+.picker { max-width: 1100px; margin: 0 auto; display: flex; flex-direction: column; gap: 28px; }
+
+.picker-head { display: flex; flex-direction: column; gap: 10px; }
+
+.mark { display: flex; align-items: center; gap: 9px; font-size: 20px; font-weight: 600;
+  letter-spacing: 0.3em; color: var(--text-faint); }
+.mark-glyph {
+  width: 18px; height: 18px; flex: 0 0 auto;
+  background: linear-gradient(90deg, var(--accent-hero) 0 34%, var(--accent-cool) 34% 52%, var(--text-faint) 52% 100%);
+}
+
+.picker-head h1 { font-size: 26px; font-weight: 600; }
+.picker-head .sub { font-size: 14px; line-height: 1.6; color: var(--text-dim); max-width: 720px; }
+.picker-head code { color: var(--text); }
+
+.layout { display: grid; grid-template-columns: 360px 1fr; gap: 32px; align-items: start; }
+
+/* ── controls ─────────────────────────────────────────────────────────── */
+
+.role {
+  display: flex; flex-direction: column; gap: 10px;
+  padding: 16px; border: 1px solid var(--rule); border-radius: 4px;
+  background: var(--ground-2);
+}
+
+.role-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.role-name { font-size: 14px; font-weight: 600; letter-spacing: 0.05em; }
+
+.swatch { width: 20px; height: 20px; border-radius: 3px; border: 1px solid var(--rule); flex: 0 0 auto; }
+
+.source-toggle { display: flex; gap: 6px; font-size: 12px; }
+.source-toggle label { display: flex; align-items: center; gap: 4px; color: var(--text-dim); cursor: pointer; }
+.source-toggle input { accent-color: var(--accent-hero); }
+
+.hue-row { display: flex; align-items: center; gap: 10px; }
+.hue-row input[type="range"] { flex: 1 1 auto; accent-color: var(--accent-hero); }
+.hue-value { font-size: 13px; color: var(--text-dim); width: 3.5em; text-align: right;
+  font-variant-numeric: tabular-nums; }
+
+.role-meta { display: flex; flex-direction: column; gap: 2px; font-size: 12px; color: var(--text-dim); }
+.role-meta .hex { color: var(--text); font-variant-numeric: tabular-nums; }
+.role-meta .ratio-ok { color: var(--accent-calendar-work); }
+.role-meta .lightened { color: var(--stale); }
+
+/* ── preview ──────────────────────────────────────────────────────────── */
+
+.preview-wrap { display: flex; flex-direction: column; gap: 16px; }
+
+/* The pane is a fixed 1280x480; scale it down to fit rather than resize the
+   iframe's own intrinsic viewport, which would change its layout math (the
+   pane's CSS assumes exactly 1280x480 — see agenda.css). */
+.preview-frame {
+  width: 720px; height: 270px;
+  overflow: hidden;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+}
+.preview-frame iframe {
+  width: 1280px; height: 480px;
+  border: 0;
+  transform: scale(0.5625); /* 720/1280 */
+  transform-origin: 0 0;
+}
+
+.save-row { display: flex; align-items: center; gap: 14px; }
+#saveBtn {
+  font-family: var(--font-mono);
+  font-size: 14px; font-weight: 600; letter-spacing: 0.05em;
+  padding: 10px 22px;
+  background: var(--accent-hero); color: var(--ground);
+  border: none; border-radius: 4px; cursor: pointer;
+}
+#saveBtn:active { opacity: 0.85; }
+#saveBtn:disabled { opacity: 0.5; cursor: default; }
+
+.status { font-size: 13px; color: var(--text-dim); }
+.status.ok { color: var(--accent-calendar-work); }
+.status.err { color: var(--stale); }

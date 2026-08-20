@@ -36,7 +36,7 @@ export const WALLPAPER_PATH = path.join(
  * calendar an event is on, distinct from `hero`/`cool`'s job of marking
  * urgency. Floored at 6.0, not 4.5 — Ricky, explicitly: "contrast is the
  * point." A tiny marker that's easy to miss defeats the purpose entirely. */
-const GATE = { hero: 4.5, cool: 7.0, text: 7.0, dim: 4.5, faint: 3.0, calendar: 6.0 };
+export const GATE = { hero: 4.5, cool: 7.0, text: 7.0, dim: 4.5, faint: 3.0, calendar: 6.0 };
 
 /* Why --accent-hero's floor is 4.5 and not 7.0 (lowered 2026-08-17).
  *
@@ -85,7 +85,21 @@ const GATE = { hero: 4.5, cool: 7.0, text: 7.0, dim: 4.5, faint: 3.0, calendar: 
  *
  * Override per-run if you want to experiment; the contrast gate still applies
  * to whatever you pick, so you cannot produce an unreadable panel this way.
+ *
+ * ENV_HUE_KEYS (2026-08-20, added for the colour picker) — the env var name
+ * per role, so a caller (the picker's save route) can tell "an env var is
+ * actually SET" apart from "fell back to the hardcoded default," which
+ * `ENV_HUE_DEFAULTS` alone cannot distinguish. Precedence for a picker-saved
+ * choice is: env var (if actually set) wins, then the picker's saved value,
+ * then the hardcoded default below — see src/palette-overrides.js.
  */
+export const ENV_HUE_KEYS = {
+  hero: 'PERIPHERAL_HERO_HUE',
+  cool: 'PERIPHERAL_COOL_HUE',
+  calendarWork: 'PERIPHERAL_CALENDAR_WORK_HUE',
+  calendarPersonal: 'PERIPHERAL_CALENDAR_PERSONAL_HUE',
+};
+
 const HERO_HUE = Number(process.env.PERIPHERAL_HERO_HUE ?? 212);
 const COOL_HUE = Number(process.env.PERIPHERAL_COOL_HUE ?? 210);
 
@@ -123,6 +137,20 @@ const COOL_HUE = Number(process.env.PERIPHERAL_COOL_HUE ?? 210);
  * scheme guaranteed. Confirmed on the glass 2026-08-20: "Looking good." */
 const CALENDAR_WORK_HUE = Number(process.env.PERIPHERAL_CALENDAR_WORK_HUE ?? HERO_HUE);
 const CALENDAR_PERSONAL_HUE = Number(process.env.PERIPHERAL_CALENDAR_PERSONAL_HUE ?? 15);
+
+/* The hue each role uses when nothing more specific overrides it — the CLI
+ * (`npm run palette`) and any caller of deriveTokens()/regenerate() that
+ * doesn't pass its own `hues` get exactly this, unchanged from before the
+ * picker existed. The picker (src/server.js's /api/palette/* routes) passes
+ * a different `hues` object per request instead of relying on env vars,
+ * since env vars are read once at process boot and a picker needs to try
+ * many candidates within one long-running server process. */
+export const ENV_HUE_DEFAULTS = {
+  hero: HERO_HUE,
+  cool: COOL_HUE,
+  calendarWork: CALENDAR_WORK_HUE,
+  calendarPersonal: CALENDAR_PERSONAL_HUE,
+};
 
 /* ── colour maths ───────────────────────────────────────────────────────── */
 
@@ -230,8 +258,27 @@ export async function sampleWallpaper(file = WALLPAPER_PATH) {
 
 /* ── token derivation ───────────────────────────────────────────────────── */
 
-export function deriveTokens({ dominantHue, secondaryHue, meanSat }) {
+/**
+ * @param {object} args
+ * @param {number} args.dominantHue
+ * @param {number} args.secondaryHue
+ * @param {number} args.meanSat
+ * @param {{hero?:number|'wallpaper', cool?:number|'wallpaper',
+ *          calendarWork?:number|'wallpaper', calendarPersonal?:number|'wallpaper'}} [args.hues]
+ *   Per-role hue overrides — added 2026-08-20 for the colour picker. Any role
+ *   left out falls back to ENV_HUE_DEFAULTS (today's CLI behaviour,
+ *   unchanged). The literal string 'wallpaper' means "use this wallpaper
+ *   sample's dominant hue instead of a pinned number" — a real, explicit
+ *   choice resolved here, not a client-side guess (see HUE POLICY above for
+ *   why the accents don't do this by default any more).
+ */
+export function deriveTokens({ dominantHue, secondaryHue, meanSat, hues = {} }) {
   const hD = dominantHue;
+  const resolveHue = (v) => (v === 'wallpaper' ? hD : v);
+  const heroHue = resolveHue(hues.hero ?? ENV_HUE_DEFAULTS.hero);
+  const coolHue = resolveHue(hues.cool ?? ENV_HUE_DEFAULTS.cool);
+  const calWorkHue = resolveHue(hues.calendarWork ?? ENV_HUE_DEFAULTS.calendarWork);
+  const calPersonalHue = resolveHue(hues.calendarPersonal ?? ENV_HUE_DEFAULTS.calendarPersonal);
   // Still sampled and still reported, but no longer feeds a token — the accent
   // hues are pinned. Kept in the report because it is the number that explains
   // where the old yellow came from, and it is what you would restore if the
@@ -261,17 +308,23 @@ export function deriveTokens({ dominantHue, secondaryHue, meanSat }) {
    *
    * `gated` only ever raises lightness, so these start values are floors: the
    * hero starts deep and stays deep because 4.5:1 is already met there. */
-  const hero = gated(HERO_HUE, clamp(accentSat, 0.85, 1.0), 0.50, groundRgb, GATE.hero);
-  const cool = gated(COOL_HUE, 0.42, 0.62, groundRgb, GATE.cool);
+  // Start lightnesses, named so the report can say whether a role's hue
+  // needed lightening beyond this floor to clear its contrast gate (added
+  // 2026-08-20 for the picker's "say plainly when a chosen hue had to be
+  // lightened to pass" requirement) — gated() only ever raises l from here.
+  const heroStartL = 0.50, coolStartL = 0.62, calWorkStartL = 0.45, calPersonalStartL = 0.55;
+  const hero = gated(heroHue, clamp(accentSat, 0.85, 1.0), heroStartL, groundRgb, GATE.hero);
+  const cool = gated(coolHue, 0.42, coolStartL, groundRgb, GATE.cool);
   const text = gated(hD, 0.16, 0.93, groundRgb, GATE.text);
   const dim = gated(hD, 0.12, 0.60, groundRgb, GATE.dim);
   const faint = gated(hD, 0.10, 0.42, groundRgb, GATE.faint);
-  // Calendar-identity accents — fixed hues (see CALENDAR_*_HUE above), high
-  // saturation floor for the same "don't read as grey at 6.86"" reason the
-  // blues use, gated at 6.0 rather than borrowing hero/cool's floors because
-  // this is its own tier with its own point (visibility of a small marker).
-  const calWork = gated(CALENDAR_WORK_HUE, 0.65, 0.45, groundRgb, GATE.calendar);
-  const calPersonal = gated(CALENDAR_PERSONAL_HUE, 0.65, 0.55, groundRgb, GATE.calendar);
+  // Calendar-identity accents — hue per `hues.calendarWork/calendarPersonal`
+  // (see CALENDAR_*_HUE above for the pinned defaults), high saturation
+  // floor for the same "don't read as grey at 6.86"" reason the blues use,
+  // gated at 6.0 rather than borrowing hero/cool's floors because this is
+  // its own tier with its own point (visibility of a small marker).
+  const calWork = gated(calWorkHue, 0.65, calWorkStartL, groundRgb, GATE.calendar);
+  const calPersonal = gated(calPersonalHue, 0.65, calPersonalStartL, groundRgb, GATE.calendar);
 
   return {
     tokens: {
@@ -299,6 +352,26 @@ export function deriveTokens({ dominantHue, secondaryHue, meanSat }) {
         faint: +contrast(faint.rgb, groundRgb).toFixed(2),
         calWork: +contrast(calWork.rgb, groundRgb).toFixed(2),
         calPersonal: +contrast(calPersonal.rgb, groundRgb).toFixed(2),
+      },
+      // Per-role detail for the picker (added 2026-08-20) — `ratios` above
+      // stays numeric-only so renderCss()'s tokens.css comment block, which
+      // reads directly from it, doesn't need to change. `hue` is the
+      // RESOLVED value (a number even when `hues.x === 'wallpaper'` was
+      // requested) so the picker can show what a "wallpaper" choice actually
+      // came out to without recomputing anything client-side.
+      roles: {
+        hero: { hue: +heroHue.toFixed(1), hex: toHex(hero.rgb),
+          ratio: +contrast(hero.rgb, groundRgb).toFixed(2), floor: GATE.hero,
+          lightened: hero.l > heroStartL, source: hues.hero === 'wallpaper' ? 'wallpaper' : 'fixed' },
+        cool: { hue: +coolHue.toFixed(1), hex: toHex(cool.rgb),
+          ratio: +contrast(cool.rgb, groundRgb).toFixed(2), floor: GATE.cool,
+          lightened: cool.l > coolStartL, source: hues.cool === 'wallpaper' ? 'wallpaper' : 'fixed' },
+        calendarWork: { hue: +calWorkHue.toFixed(1), hex: toHex(calWork.rgb),
+          ratio: +contrast(calWork.rgb, groundRgb).toFixed(2), floor: GATE.calendar,
+          lightened: calWork.l > calWorkStartL, source: hues.calendarWork === 'wallpaper' ? 'wallpaper' : 'fixed' },
+        calendarPersonal: { hue: +calPersonalHue.toFixed(1), hex: toHex(calPersonal.rgb),
+          ratio: +contrast(calPersonal.rgb, groundRgb).toFixed(2), floor: GATE.calendar,
+          lightened: calPersonal.l > calPersonalStartL, source: hues.calendarPersonal === 'wallpaper' ? 'wallpaper' : 'fixed' },
       },
     },
   };
@@ -334,9 +407,14 @@ ${Object.entries(tokens).map(([k, v]) => `  ${k}: ${v};`).join('\n')}
 `;
 }
 
-export async function regenerate() {
+/**
+ * @param {object} [hues] Per-role overrides, same shape deriveTokens() takes.
+ *   Omitted entirely, this reproduces the exact CLI/pre-picker behaviour —
+ *   ENV_HUE_DEFAULTS via deriveTokens()'s own default parameter.
+ */
+export async function regenerate(hues) {
   const sample = await sampleWallpaper();
-  const derived = deriveTokens(sample);
+  const derived = deriveTokens(hues === undefined ? sample : { ...sample, hues });
   await fs.writeFile(TOKENS_OUT, renderCss(derived), 'utf8');
   return derived;
 }

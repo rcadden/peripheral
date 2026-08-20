@@ -90,6 +90,18 @@ urgency blues — blue now marks both "now/next" and "this is work," by
 request, not oversight. **Confirmed on the glass: "Looking good."** See the
 dated hue history in `src/palette.js`.
 
+**Sprint 5's colour picker shipped 2026-08-20** — `/settings/palette/`,
+served alongside the existing panes, never reachable through the daemon's
+own Renderer (confirmed by reading `render.js`: it holds exactly one
+Playwright page, and nothing calls `goto()` with the picker's URL). Live
+preview overrides CSS custom properties on an embedded `<iframe>` of the real
+pane, in-browser only, zero disk writes until Save — verified live against
+the running daemon, not just unit tests. `daemon.js`/`render.js` needed no
+changes at all; the existing `web/` file watcher already does the rest.
+See `directives/roadmap.md`'s Sprint 5 entry for the full verification list
+and the one honestly-scoped gap (picker choices aren't re-applied by the
+bare CLI, only by the picker's own Save path).
+
 <!-- Superseded 2026-08-17, kept per the no-tidying rule: -->
 <details><summary>Previous status (pre-OAuth)</summary>
 Sprint 1 — Foundation, essentially complete. Hardware arrived and works; the

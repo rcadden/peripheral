@@ -16,6 +16,8 @@ import http from 'node:http';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { sampleWallpaper, deriveTokens, regenerate } from './palette.js';
+import { PaletteOverridesStore, mergeHues } from './palette-overrides.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const WEB_ROOT = path.resolve(__dirname, '..', 'web');
@@ -39,6 +41,73 @@ let currentState = null;
 
 export function setState(next) {
   currentState = next;
+}
+
+/* Colour-picker plumbing (added 2026-08-20). One store instance for the
+ * process lifetime — cheap, and PaletteOverridesStore itself does no
+ * caching, so every call re-reads the file (small, infrequent writes). */
+const paletteOverrides = new PaletteOverridesStore();
+
+/** Parse ?hero=..&cool=..&calendarWork=..&calendarPersonal=.. into a partial
+ * hues object. A value is either a finite number or the literal "wallpaper".
+ * Absent params are simply omitted, letting mergeHues() fall through to the
+ * saved/env/default chain for whichever roles weren't specified. */
+function parseQueryHues(searchParams) {
+  const out = {};
+  for (const role of ['hero', 'cool', 'calendarWork', 'calendarPersonal']) {
+    if (!searchParams.has(role)) continue;
+    const raw = searchParams.get(role);
+    out[role] = raw === 'wallpaper' ? 'wallpaper' : Number(raw);
+  }
+  return out;
+}
+
+async function handlePalettePreview(req, res, searchParams) {
+  try {
+    const saved = await paletteOverrides.load();
+    const hues = mergeHues(saved, parseQueryHues(searchParams));
+    // Deliberately re-sampled every call, not cached — this is local,
+    // low-frequency (a human dragging a slider, not a hot loop), and the
+    // wallpaper file is small. Caching risks serving a stale sample if the
+    // wallpaper changes mid-session, which would be a worse bug than the
+    // extra decode cost.
+    const sample = await sampleWallpaper();
+    const derived = deriveTokens({ ...sample, hues });
+    res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' })
+      .end(JSON.stringify(derived));
+  } catch (err) {
+    res.writeHead(500, { 'content-type': 'application/json' })
+      .end(JSON.stringify({ error: err.message }));
+  }
+}
+
+async function handlePaletteSave(req, res) {
+  let body = '';
+  try {
+    for await (const chunk of req) {
+      body += chunk;
+      if (body.length > 4096) {
+        res.writeHead(413).end('too large');
+        return;
+      }
+    }
+    const parsed = JSON.parse(body);
+    if (typeof parsed.hues !== 'object' || parsed.hues === null) {
+      res.writeHead(400, { 'content-type': 'application/json' })
+        .end(JSON.stringify({ error: 'expected {"hues": {...}}' }));
+      return;
+    }
+
+    await paletteOverrides.save(parsed.hues);
+    const saved = await paletteOverrides.load();
+    // Re-derive with the merged (env-precedence-applied) hues so the daemon's
+    // own web/ watcher picks up the same tokens.css this response describes.
+    const derived = await regenerate(mergeHues(saved, {}));
+    res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify(derived));
+  } catch (err) {
+    res.writeHead(err instanceof SyntaxError ? 400 : 500, { 'content-type': 'application/json' })
+      .end(JSON.stringify({ error: err.message }));
+  }
 }
 
 async function serveStatic(req, res, urlPath) {
@@ -69,9 +138,19 @@ async function serveStatic(req, res, urlPath) {
 }
 
 const server = http.createServer(async (req, res) => {
-  const { pathname } = new URL(req.url, `http://${HOST}:${PORT}`);
+  const { pathname, searchParams } = new URL(req.url, `http://${HOST}:${PORT}`);
+
+  // The one POST route in this server, matched before the blanket GET-only
+  // gate below — everything else stays GET-only, unchanged.
+  if (req.method === 'POST' && pathname === '/api/palette/save') {
+    return void handlePaletteSave(req, res);
+  }
 
   if (req.method !== 'GET') return void res.writeHead(405).end('method not allowed');
+
+  if (pathname === '/api/palette/preview') {
+    return void handlePalettePreview(req, res, searchParams);
+  }
 
   if (pathname === '/api/state') {
     if (!currentState) {

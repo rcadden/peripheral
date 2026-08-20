@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Peripheral — Colour Picker</title>
+<link rel="stylesheet" href="/tokens.css">
+<link rel="stylesheet" href="./palette.css">
+</head>
+<body>
+<!-- Not a pane — never screenshotted, never pushed to the physical panel.
+     Nothing in daemon.js/render.js ever points the daemon's own Renderer at
+     this URL; it exists purely for a human to open in their own browser tab.
+     See CHANGELOG 2026-08-20 for why that isolation is safe by construction:
+     the daemon's Renderer holds exactly one Playwright page, and nothing
+     here ever calls its goto(). Editing files in this folder while `npm
+     start` is running WILL trigger the daemon's web/ file watcher and cause
+     a harmless extra reload of the agenda pane — expected, not a bug. -->
+<main class="picker">
+
+  <header class="picker-head">
+    <div class="mark"><span class="mark-glyph"></span>PERIPHERAL</div>
+    <h1>Colour picker</h1>
+    <p class="sub">
+      The contrast gate is never optional — every swatch below is the exact
+      same math the panel itself uses (<code>src/palette.js</code>), so a
+      colour that fails its floor is lightened until it passes, not shipped
+      broken. Preview happens instantly against the real pane on the right;
+      nothing is written to disk until you press Save.
+    </p>
+  </header>
+
+  <div class="layout">
+    <section class="controls" id="controls" aria-label="Colour controls"></section>
+
+    <section class="preview-wrap">
+      <div class="preview-frame">
+        <iframe id="preview" src="/panes/agenda/" title="Live pane preview"></iframe>
+      </div>
+      <div class="save-row">
+        <button id="saveBtn" type="button">Save</button>
+        <span class="status" id="status"></span>
+      </div>
+    </section>
+  </div>
+
+</main>
+<script type="module" src="./palette.js"></script>
+</body>
+</html>
