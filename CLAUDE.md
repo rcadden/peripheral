@@ -384,6 +384,27 @@ interchangeably. Nothing else in the build depends on which one we get.
 - Type scale is tuned for 6.86" read from ~3 feet, not for a desktop monitor.
 
 ## Lessons Learned
+- **2026-08-20 — A `diff` against a file holding real secrets prints those
+  secrets, and a verification step doesn't get a pass on that just because
+  it's "only checking a restore worked."** While testing `scripts/setup.js`'s
+  fresh-clone path (temporarily moving the real `.env` aside, running setup,
+  restoring it), the restore-verification step ran `diff .env .env.example`
+  to confirm the file came back — and printed the real, live
+  `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` in plaintext into the session
+  transcript. The file itself was never damaged; the mistake was showing its
+  contents at all. Ricky was told immediately and offered a secret rotation,
+  which he deferred to handle himself later — recorded here as still
+  outstanding, not resolved.
+  **Standing rule: never `cat`, `diff`, `grep -P` (print mode), or otherwise
+  echo the contents of `.env` or any file matched by this project's own
+  gitignore secrets section, even for verification, even against a template
+  file.** Confirm a secret-bearing file's state by structural checks only —
+  line count, a specific key's presence via `grep -c` (count, not content),
+  file size, mtime — never by printing the diff. This is the same class of
+  mistake the git-status secret-scan step already guards against for
+  commits; it was missed here because the operation was "just testing a
+  script," not "about to commit," and the rule hadn't been generalized to
+  cover ad-hoc verification commands.
 - **2026-08-20 — Satisfying a roadmap item's REASONING is not the same as
   building what it asked for, and the gap survives a full build-and-verify
   pass if nobody re-reads the original ask at close time.** Sprint 3's

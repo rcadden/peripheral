@@ -586,8 +586,45 @@ unchanged. Any earlier reference to "Sprint 3 — Polish and release" means this
       already worked. `palette-overrides.json` exists so a *future* call to
       `regenerate()` can still honor the choice, not because today's boot
       sequence reads it.
-- [ ] `README` with photos of the thing actually running
-- [ ] One-command setup for someone who owns the same $38 panel
+- [~] **`README` rewritten — 2026-08-20, text complete, real photo still
+      needed.** Replaced the 2026-08-17/18 version (written before hardware
+      even arrived, setup section literally said "not yet documented") with
+      the actual current state: real OAuth setup, weather, calendar colors,
+      the colour picker, `npm run setup`. **Left `[~]` rather than `[x]`
+      because the roadmap's own wording is "with photos"** — the README has
+      a clearly marked placeholder (`<!-- TODO -->` comment, commented-out
+      `<img>` tag) rather than a real shot of the panel on a real desk
+      showing a real day. `docs/first-light.jpg` exists (the very first
+      frame push, 2026-08-17) but is a calibration test pattern, not the
+      product — using it as the README's hero image would be misleading for
+      a public repo. Needs Ricky to take an actual photo; `docs/**/*.jpg` is
+      already exempted from `.gitignore` for exactly this.
+- [x] **One-command setup — DONE 2026-08-20.** New `npm run setup`
+      (`scripts/setup.js`) does everything that's actually scriptable:
+      creates `.env` from `.env.example` if missing, regenerates the palette
+      from the current wallpaper, probes for the panel over HID — then
+      prints the ordered remaining steps, honestly, with the one
+      unavoidable manual one (creating a Google OAuth client — no API exists
+      to script that) called out first rather than buried at the end.
+      Nothing in it is fatal: a step that can't run yet (no `sharp`, no
+      panel plugged in, `.env` not filled in) prints why and moves on.
+      Runs the underlying scripts directly via `node <path>` rather than
+      through `npm run` — spawning `npm.cmd` on Windows without a shell
+      throws `EINVAL` (confirmed by testing, not assumed), and `shell: true`
+      trades that for a Node deprecation warning (DEP0190) for no benefit
+      here, since every argument is a fixed literal, never user input.
+      Verified against the real repo: the already-has-`.env` path leaves it
+      alone, the fresh-clone path creates one correctly from the template.
+      **Incident during that second test, unrelated to the script's own
+      correctness:** the verification step's own `diff .env .env.example`
+      printed the real `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` in plaintext
+      into the session transcript. The file itself was never damaged or
+      lost — restored correctly, confirmed via line count and a key-prefix
+      `grep -c`, never by re-printing content. Ricky was told immediately
+      and offered a secret rotation; he's deferred that to handle himself
+      later. Dated Lessons Learned entry in `CLAUDE.md` generalizes the
+      rule: never echo a secrets-bearing file's contents for verification,
+      even against a template, even when "just testing a script."
 - [ ] Second panel support (the 9.16" 1920×480 sibling is the same family)
 - [ ] **Public repo, MIT — LAST, on purpose.** Ricky, 2026-08-20, after a
       proposal to trim scope and flip public early was turned down: *"first I

@@ -8,6 +8,7 @@
     "node": ">=22"
   },
   "scripts": {
+    "setup": "node scripts/setup.js",
     "serve": "node --env-file-if-exists=.env src/server.js",
     "start": "node --env-file-if-exists=.env src/daemon.js",
     "_comment_test": "Scoped glob on purpose. Bare `node --test` auto-discovers anything matching *-test.js, which sweeps in src/transport/idle-test.js and pushes frames to real hardware for 68s. Tests must never drive the panel.",
