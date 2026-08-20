@@ -1182,6 +1182,22 @@ Immediately following the weather decision above, Ricky went further: *"I don't 
 
 The project's shape going forward: **one pane, made richer, not several panes cycled between.** Weather in the bar is the model for how new capability gets added — as a bar or column addition to the existing agenda pane — rather than as a standalone pane.
 
+### Changed — Sprint 5 opens with the colour palette rework, blue/orange calendar identity (2026-08-20)
+
+Queued unscheduled since Sprint 2's close ("we'll need to rework the color palette... put that on a future tuning/optimization sprint" — green/pink were a first pass through the contrast gate, not a considered choice). Landed as full-scope, not calendar-only, per Ricky's answer when asked.
+
+Also asked for and shipped in the same pass, off-topic but quick: **weather icons enlarged from 20px to 26px** (`.stat-icon` in `agenda.css`), matched to `.stat-value`'s font size rather than chosen independently — a glyph visibly smaller than the number beside it read as an afterthought.
+
+**Two live-iterated candidates before landing:**
+1. **Teal work / rose personal** (hues 175/350) — rejected: "I don't like the teal that's used on the full schedule list."
+2. **Orange work / rose personal** (hues 15/350) — a near-miss caught before it ever reached the glass: the *first* orange attempt (25°) landed almost on top of the fixed `--stale` badge (`#d98a3d`, ~30°) — measured, not eyeballed: nearly identical saturation (0.65 vs 0.67) and lightness. Corrected to 15° before showing it.
+
+**Final direction — the opposite mapping from what was being tested:** Ricky, once orange was on the glass: *"I want the blue to be my work calendar and the orange to be my personal calendar."* Not "keep experimenting with the warm pair" — a request to reuse the **already-accepted urgency blue** for work-calendar identity, deliberately reversing the 2026-08-18 rule that calendar colors must be genuinely different hue families from `accent-hero`/`accent-cool`. `--accent-calendar-work` now derives from `HERO_HUE` (212°), gated independently so it lands as a related-but-visibly-different shade (`#5292da`) rather than a duplicate of hero's `#0d78f2`. `--accent-calendar-personal` stayed at the corrected orange, 15° (`#da714e`) — not the mathematically true complement of blue (~32°, which is the near-collision with `--stale` described above).
+
+Defaults in `src/palette.js` updated (`CALENDAR_WORK_HUE` now derives from `HERO_HUE` instead of a fixed 140; `CALENDAR_PERSONAL_HUE` defaults to 15, was 330) so this survives a bare `npm run palette` with no env override — confirmed by regenerating without overrides and diffing against the last live-tested values (identical). 82 tests unchanged. **Confirmed on the glass: "Looking good."**
+
+**Side effect, noted to Ricky before he confirmed, not discovered after:** on an is-now/is-next work-event row, the phase tick (blue, marks urgency) and the calendar-colored title/time (also blue now, marks "this is work") render the same hue. The 2026-08-18 scheme's guarantee — a calendar tick and a phase tick never compete for the same meaning — no longer holds for work events. Accepted as the cost of the simplification, not missed.
+
 ## Decisions worth not relitigating
 
 Recorded here so they survive a cold start. Full reasoning lives in `CLAUDE.md`.

@@ -89,11 +89,11 @@ const GATE = { hero: 4.5, cool: 7.0, text: 7.0, dim: 4.5, faint: 3.0, calendar: 
 const HERO_HUE = Number(process.env.PERIPHERAL_HERO_HUE ?? 212);
 const COOL_HUE = Number(process.env.PERIPHERAL_COOL_HUE ?? 210);
 
-/* Calendar-identity hues (2026-08-18) — a separate concern from HERO_HUE/
- * COOL_HUE above, which mark URGENCY (now / next) and stay blue on purpose.
- * Ricky, when offered "shades of one hue" for calendar identity: "I don't
- * want shades - I want completely different colors. Contrast is the point."
- * So these are genuinely different hue families, chosen to sit far from
+/* Calendar-identity hues — REWORKED 2026-08-20, superseding the 2026-08-18
+ * green/magenta scheme below (kept here per the no-tidying rule, not because
+ * it's still in effect).
+ *
+ * ~~So these are genuinely different hue families, chosen to sit far from
  * both the blue accents (~210) AND the amber --stale badge (~30):
  *   work      ~140, green — reads clearly, and luminance weights green
  *             heavily (0.7152), so it clears a high contrast floor without
@@ -102,9 +102,27 @@ const COOL_HUE = Number(process.env.PERIPHERAL_COOL_HUE ?? 210);
  *             readable as an error/alert state the way pure red would be.
  * Being genuinely different hues from accent-hero/accent-cool is what makes
  * this safe to introduce at all — a calendar tick and a phase tick never
- * compete for the same meaning. */
-const CALENDAR_WORK_HUE = Number(process.env.PERIPHERAL_CALENDAR_WORK_HUE ?? 140);
-const CALENDAR_PERSONAL_HUE = Number(process.env.PERIPHERAL_CALENDAR_PERSONAL_HUE ?? 330);
+ * compete for the same meaning.~~
+ *
+ * Ricky, 2026-08-20, after the green/pink scheme was flagged at Sprint 2's
+ * close as "not a considered final choice": *"I want the blue to be my work
+ * calendar and the orange to be my personal calendar."* A deliberate reversal
+ * of the "genuinely different from accent-hero/cool" rule above — blue now
+ * carries double duty (urgency AND "this is work"), by design, not oversight.
+ *   work      = HERO_HUE (212, same family as the urgency blue), gated
+ *             independently so it lands as a related but visibly distinct
+ *             shade (#5292da vs hero's #0d78f2), not a pixel duplicate.
+ *   personal  15, a vivid red-leaning orange. NOT the mathematically true
+ *             complement of 212 (~32) — that value sits almost exactly on
+ *             the fixed --stale badge (~30, #d98a3d) and would collide with
+ *             it. Offset to 15 to stay visually distinct from stale while
+ *             still reading as orange.
+ * Consequence, noted and accepted: on an is-now/is-next work-event row, the
+ * phase tick (blue) and the calendar-colored title/time (also blue now)
+ * render the same hue — no longer the separated signal the 2026-08-18
+ * scheme guaranteed. Confirmed on the glass 2026-08-20: "Looking good." */
+const CALENDAR_WORK_HUE = Number(process.env.PERIPHERAL_CALENDAR_WORK_HUE ?? HERO_HUE);
+const CALENDAR_PERSONAL_HUE = Number(process.env.PERIPHERAL_CALENDAR_PERSONAL_HUE ?? 15);
 
 /* ── colour maths ───────────────────────────────────────────────────────── */
 

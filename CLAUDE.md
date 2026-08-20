@@ -79,6 +79,17 @@ forward is one pane, richer, not several panes cycled between. "Tomorrow's
 first event" survives as a Future Exploration, reframed as an agenda-pane
 addition rather than a new pane, since it never needed cycling anyway.
 
+**Sprint 5 opened the same day with the colour palette rework, queued since
+Sprint 2.** Two live-iterated candidates (teal/rose rejected — "I don't like
+the teal"; a first orange attempt caught before ever reaching the glass, at
+25°, nearly on top of the fixed `--stale` badge, measured not eyeballed)
+before Ricky's actual direction: *"I want the blue to be my work calendar
+and the orange to be my personal calendar."* A deliberate reversal of the
+2026-08-18 rule that calendar colors must be genuinely different from the
+urgency blues — blue now marks both "now/next" and "this is work," by
+request, not oversight. **Confirmed on the glass: "Looking good."** See the
+dated hue history in `src/palette.js`.
+
 <!-- Superseded 2026-08-17, kept per the no-tidying rule: -->
 <details><summary>Previous status (pre-OAuth)</summary>
 Sprint 1 — Foundation, essentially complete. Hardware arrived and works; the

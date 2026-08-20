@@ -170,12 +170,15 @@ rather than designed upfront and shipped once.
 - **`focusTime`/`outOfOffice` taking the hero slot is still genuinely open**
   (below) — a judgement call, not a build, and closing the sprint doesn't
   answer it. Carried forward rather than force-closed.
-- **Also carried forward, explicitly deferred rather than dropped: the
-  colour palette needs a rework.** Ricky, same closing message: *"We'll
+- ~~**Also carried forward, explicitly deferred rather than dropped: the
+  colour palette needs a rework.** Ricky, same closing message: "We'll
   need to rework the color palette, but let's put that on a future
-  tuning/optimization sprint."* Green/pink cleared the contrast gate but
+  tuning/optimization sprint." Green/pink cleared the contrast gate but
   were not a considered final choice. Not scheduled to a specific sprint
-  yet — surface it when picking the next design-heavy piece of work.
+  yet — surface it when picking the next design-heavy piece of work.~~
+  **DONE 2026-08-20**, opening Sprint 5. Calendar identity reworked to
+  blue (work) / orange (personal) — see Sprint 5 below and the dated note
+  in `src/palette.js`. Confirmed on the glass: "Looking good."
 
 *Was "Sprint 2 — More of life", whose "New panes" half is now Sprints 3 and 4.*
 
@@ -506,6 +509,27 @@ a pane" doesn't have anywhere to land either. Kept per the no-tidying rule.
 
 *Was Sprint 3. Renumbered 2026-08-18 when Sprint 2 was split; contents
 unchanged. Any earlier reference to "Sprint 3 — Polish and release" means this.*
+- [x] **Colour palette rework — DONE 2026-08-20, opening this sprint.** Queued
+      unscheduled since Sprint 2's close, when green/pink calendar colors were
+      shipped as a first pass through the contrast gate, not a considered
+      choice. Landed as a full-scope conversation (Ricky chose "everything,"
+      not just calendar colors) that converged, after two live-iterated
+      candidates, on **blue = work calendar, orange = personal calendar** —
+      a deliberate reversal of the prior "calendar colors must be genuinely
+      different from the urgency blues" rule, not an oversight. `--accent-
+      calendar-work` now shares `HERO_HUE` (212°, gated independently to a
+      related-but-distinct shade, `#5292da` vs hero's `#0d78f2`);
+      `--accent-calendar-personal` is a vivid orange at 15° — offset from the
+      *mathematically true* complement of blue (~32°) because that value
+      lands almost exactly on the fixed `--stale` badge color (~30°,
+      `#d98a3d`) and would have collided with it. One candidate was rejected
+      mid-session (teal/rose, disliked on the full schedule list) before
+      landing here. Full reasoning and hue history in `src/palette.js`.
+      Confirmed on the glass: "Looking good." 82 tests unchanged.
+      **Side effect, noted and accepted:** on an is-now/is-next work-event
+      row, the phase tick and the calendar-colored title/time are now both
+      blue — the separated-signal guarantee the 2026-08-18 green/magenta
+      scheme provided is gone by design.
 - [ ] **Colour picker in the packaged release, like Golem's.** Right now the
       accent hues are constants in `src/palette.js` with env-var overrides, and
       re-tinting the panel means editing source and running `npm run palette`.
