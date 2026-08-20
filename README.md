@@ -147,6 +147,4 @@ Idea from [this thread](https://old.reddit.com/r/ClaudeAI/comments/1vk88m5/38_cl
 
 ## License
 
-MIT, applied when this repo goes public (see `directives/roadmap.md`'s
-Sprint 5 — the license file and the visibility flip land together, on
-purpose, as the last step).
+[MIT](LICENSE).

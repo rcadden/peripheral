@@ -3,6 +3,11 @@
   "version": "0.1.0",
   "private": true,
   "description": "Your life, in the corner of your eye. An ambient panel for a 1280x480 USB LCD.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rcadden/peripheral.git"
+  },
   "type": "module",
   "engines": {
     "node": ">=22"
