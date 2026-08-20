@@ -549,9 +549,18 @@ unchanged. Any earlier reference to "Sprint 3 — Polish and release" means this
         idea and still the nicest default for someone who has not thought
         about it.
 - [ ] `README` with photos of the thing actually running
-- [ ] Public repo, MIT
 - [ ] One-command setup for someone who owns the same $38 panel
 - [ ] Second panel support (the 9.16" 1920×480 sibling is the same family)
+- [ ] **Public repo, MIT — LAST, on purpose.** Ricky, 2026-08-20, after a
+      proposal to trim scope and flip public early was turned down: *"first I
+      want to finish the items in the roadmap, then we can do all of this as
+      the last/final step."* Full scope stays — colour picker and second
+      panel support are not being deferred past the public flip. The
+      full-history secret scan already run 2026-08-20 came back clean
+      (`.env` never committed, no OAuth client secrets or refresh tokens
+      anywhere in git history) — worth re-running once more immediately
+      before the actual flip, since more commits will land between now and
+      then.
 
 ## Future Explorations
 - **Tomorrow's first event when today is done — moved here 2026-08-20** from
