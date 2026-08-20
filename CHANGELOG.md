@@ -1159,6 +1159,14 @@ Started from "should I return the 1280×480 panel for an 11.3" one to fit weathe
 
 **CORRECTED same day — non-event.** Ricky: the panel simply wasn't physically connected during this session. There was no HID handle to leave in a bad state and no hardware or shutdown-path defect to explain — `taskkill /F` skipping the graceful-shutdown path is still true as a general fact about this daemon (worth remembering for a future *real* restart-while-connected), but it explains nothing here, because nothing was plugged in. Ricky confirmed the pane looks correct via the browser preview, which the project already treats as glass-equivalent verification. The failure-log row below is left in place per the no-tidying rule but should be read as "no panel was attached," not as a reconnect failure.
 
+### Verified — weather work confirmed on the glass, 2026-08-20
+
+Picked back up next session to close out what 2026-08-19 built. 82/82 tests still pass, unchanged. `/api/state` confirmed serving real merged weather + calendar data (72°F, 89° high, 46% precip, NWS "Light Rain" alongside the day's real meetings). DOM-level check on the live pane at true 1280×480: `.bar` measured 1220px with no overflow, no scroll on `body`, no console errors, all three bar panels (logo/weather/time) present and populated. **Then confirmed by Ricky directly on the physical panel: "looks good on the glass."** This is the first time this feature was actually seen on hardware rather than only reasoned about from the browser fallback — the two are treated as equivalent per the 2026-08-18 standing permission, but an actual look still happened.
+
+Committed as `ecb5c52`, pushed `dev`.
+
+**Roadmap correction found while closing this out:** the 2026-08-18 roadmap text asked for weather as **a separate pane** — the "proof pane" that pane cycling would cycle to. What got built instead is weather folded into the agenda pane's own top bar, always visible, not a standalone pane. Functionally this still answers the roadmap's underlying question (can the panel show more than the calendar, cheaply, with no new auth) — but it does **not** give Sprint 3's other item, pane cycling, anything to cycle to. Left as `[~]` in `directives/roadmap.md` rather than `[x]`, flagged `NEEDS RICKY`: does bar-embedded weather replace the need for a weather *pane*, or does cycling still want a second pane and, if so, what should it be? The sprint's closing condition ("cycles between agenda and weather") is written against a pane that doesn't exist and needs rewriting once that's answered.
+
 ## Decisions worth not relitigating
 
 Recorded here so they survive a cold start. Full reasoning lives in `CLAUDE.md`.

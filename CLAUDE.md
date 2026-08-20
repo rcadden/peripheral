@@ -64,6 +64,16 @@ moved from 3 to **5**. A mapping table for the dead labels is at the top of
 `directives/roadmap.md`, along with a **Standing watch** list of things that
 cannot be closed by working on them. See the handoff.
 
+**Sprint 3 opened 2026-08-19/20 with weather, but it landed sideways.**
+`NwsProvider` (free, keyless NWS API, hardcoded to Ricky's real address) is
+built, wired into the daemon on its own cadence, and **confirmed on the glass
+2026-08-20** ("looks good"). But it shipped as a redesigned three-panel top
+bar on the *existing* agenda pane, not as the separate weather pane the
+roadmap asked for — so it answers "can the panel show more than the
+calendar" without giving Sprint 3's other item, pane cycling, anything to
+cycle to. Left `[~]` in the roadmap, `NEEDS RICKY`. Pane cycling itself is
+untouched. See the handoff.
+
 <!-- Superseded 2026-08-17, kept per the no-tidying rule: -->
 <details><summary>Previous status (pre-OAuth)</summary>
 Sprint 1 — Foundation, essentially complete. Hardware arrived and works; the
@@ -77,7 +87,7 @@ the entire fetch path in one go.
 </details>
 
 > **Starting a session? Read
-> [`docs/plans/session-handoff-2026-08-18e.md`](docs/plans/session-handoff-2026-08-18e.md)
+> [`docs/plans/session-handoff-2026-08-20.md`](docs/plans/session-handoff-2026-08-20.md)
 > first.** It has the ordered next actions, what is verified and by what
 > method, and the open questions that need Ricky.
 
@@ -346,6 +356,25 @@ interchangeably. Nothing else in the build depends on which one we get.
 - Type scale is tuned for 6.86" read from ~3 feet, not for a desktop monitor.
 
 ## Lessons Learned
+- **2026-08-20 — Satisfying a roadmap item's REASONING is not the same as
+  building what it asked for, and the gap survives a full build-and-verify
+  pass if nobody re-reads the original ask at close time.** Sprint 3's
+  weather item was written as "a weather pane — the proof [that cycling has
+  something to cycle to]." What got built answers the underlying question
+  (can the panel show more than the calendar, cheaply) but is not a pane —
+  it's a redesigned bar on the existing agenda pane. Every verification this
+  session passed: tests green, DOM clean, data correct, and Ricky confirmed
+  it on the glass. None of that checks whether the shipped thing is the
+  shape the roadmap actually asked for, because that's a different question
+  than "does this work."
+  **Standing rule: at session-close, re-read the original roadmap item's
+  wording against what was actually built, not just against whether it
+  works.** A feature can be fully verified and still leave its sprint's
+  stated closing condition referring to something that no longer exists —
+  here, "cycles between agenda and weather" now names a pane that was never
+  made. Caught during Step 2 of `/session-close`, not during the build
+  itself; worth checking earlier next time a roadmap item's build diverges
+  partway through from its literal description.
 - **2026-08-18 — A child's own `align-self` beats a parent's `align-items`,
   silently.** Wrapped list rows needed their bullet top-aligned instead of
   baseline-aligned, so `align-items: start` was added on the row. It did

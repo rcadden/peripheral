@@ -446,17 +446,37 @@ rather than designed upfront and shipped once.
       never cost a frame.** If a `goto()` plus font settle takes longer than the
       forget window, the previous pane's frame keeps shipping until the new one
       is ready. Never blank between panes.
-- [ ] **Weather pane — the proof, not a nice-to-have.** Cycling cannot be
-      verified with one pane, and shipping cycling infrastructure with nothing
-      to cycle to would be untested infrastructure — the exact trap that cost
-      the 2026-08-18 session. Weather is the cheapest real second pane: no
-      OAuth, no new scopes, no new token. It earns its place here by being the
-      thing that proves the mechanism.
-      Open: which source, and whether it needs an API key (prefer a zero-cost
-      one — name the recurring cost before choosing).
+- [~] **Weather — built 2026-08-19, but NOT as a separate pane.** `NwsProvider`
+      (`src/sources/weather.js`) answered the open question here: free, keyless
+      NWS API (`api.weather.gov`), hardcoded to Ricky's actual address (grid
+      `GSP 54,73`, station `KAVL`) rather than geocoded at runtime, since the
+      install is fixed in one spot. Zero recurring cost. Wired into the daemon
+      on its own 15-min interval (`WEATHER_INTERVAL_MS`, independent of the
+      calendar's 60s), merged into `/api/state` via `publishState()`.
+      **But it landed inside the agenda pane's own top bar** — a redesign from
+      "logo + clock" into three co-equal panels (logo / weather / time) — not
+      as a standalone pane. Three live rounds with Ricky before landing: weather
+      promoted from a small aside to equal visual weight with the clock, its
+      three stats (temp/high/precip) made uniform with no demoted caption
+      tier, and the date caption bumped off an illegible-at-3ft faint size.
+      Verified 2026-08-19/20: 82 tests unchanged, `/api/state` serving real
+      weather data, DOM-clean at true 1280×480 (no overflow, no console
+      errors), **and confirmed on the glass** ("looks good") 2026-08-20.
+      **This satisfies the roadmap's original reasoning — weather as the
+      cheapest real proof that the panel can show more than the calendar —
+      but does NOT satisfy the literal ask of "a pane to cycle to."** Left
+      `[~]` rather than `[x]` for that reason. **NEEDS RICKY:** does
+      always-visible weather in the bar replace the need for a weather pane,
+      or does pane cycling still want a second pane to prove itself against
+      (and if so, what)? The closing condition below is stale until this is
+      answered.
 
-**Closing condition:** the panel cycles between agenda and weather, unattended,
-across a logon, with no blank frame at the switch and no flicker on the glass.
+**Closing condition, as originally written — now stale, not deleted:** ~~the
+panel cycles between agenda and weather, unattended, across a logon, with no
+blank frame at the switch and no flicker on the glass.~~ Weather no longer
+being a candidate pane means cycling needs a different second thing to prove
+itself against, or the closing condition needs rewriting around what a
+"pane" now means on this project. Open, per above.
 
 ## Sprint 4 — More panes
 
