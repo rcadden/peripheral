@@ -12,13 +12,27 @@
      (2) opened in a normal browser as the fallback when the panel is dead. -->
 <main class="pane" id="pane">
 
+  <!-- Three co-equal panels — logo / weather / time — mirroring the body
+       grid below, not a logo with the clock and weather hung off its right
+       edge. See CHANGELOG 2026-08-19: weather went through several rounds
+       live before landing here (bar placement, then equal visual weight for
+       all three weather stats, then dropping small "faint" captions
+       entirely as illegible at 3ft). -->
   <header class="bar">
-    <div class="mark">
-      <span class="mark-glyph"></span>PERIPHERAL
+    <div class="bar-panel logo">
+      <div class="mark"><span class="mark-glyph"></span>PERIPHERAL</div>
     </div>
-    <div class="bar-right">
+
+    <div class="bar-panel weather">
+      <div class="weather-stats" id="weatherStats"></div>
+    </div>
+
+    <div class="bar-panel time">
       <span class="badge" id="badge" hidden>STALE</span>
-      <span class="clock" id="clock">—</span>
+      <div class="time-figures">
+        <span class="clock" id="clock">—</span>
+        <span class="date-caption" id="dateCaption">—</span>
+      </div>
     </div>
   </header>
 

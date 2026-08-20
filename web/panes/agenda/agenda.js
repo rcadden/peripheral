@@ -18,6 +18,8 @@ const TICK_MS = 1_000;  // countdown repaint
 
 const el = {
   clock: document.getElementById('clock'),
+  dateCaption: document.getElementById('dateCaption'),
+  weatherStats: document.getElementById('weatherStats'),
   badge: document.getElementById('badge'),
   heroEyebrow: document.getElementById('heroEyebrow'),
   countdown: document.getElementById('countdown'),
@@ -40,8 +42,12 @@ const DAYS = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
 const MONTHS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN',
                 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
 
-function fmtClock(d) {
-  return `${DAYS[d.getDay()]} ${MONTHS[d.getMonth()]} ${d.getDate()} · ${fmtTime(d)}`;
+// Was one combined "TUE AUG 19 · 2:14 PM" string in a single .clock element.
+// Split 2026-08-19 when the bar became three co-equal panels — the clock now
+// needs to be its own headline (same size as the weather stats) with the
+// date as a smaller caption underneath, not one long line.
+function fmtDate(d) {
+  return `${DAYS[d.getDay()]} ${MONTHS[d.getMonth()]} ${d.getDate()}`;
 }
 
 function fmtTime(d) {
@@ -130,6 +136,42 @@ function remainingSizeClass(text) {
   return 'len-md';
 }
 
+/* ── weather ────────────────────────────────────────────────────────────── */
+
+// Flat, two-tone glyphs matching the mark-glyph's aesthetic — no gradients,
+// no skeuomorphism. Coarse on purpose: NWS's condition vocabulary is much
+// larger than five states; see mapCondition() in src/sources/weather.js for
+// where that narrowing happens.
+const CONDITION_ICONS = {
+  clear: '<circle cx="12" cy="12" r="6" fill="var(--accent-cool)"/>',
+  cloudy: '<circle cx="9" cy="9" r="6" fill="var(--accent-cool)" opacity="0.9"/>'
+    + '<path d="M4 16h14a4 4 0 000-8 5.5 5.5 0 00-10.6 1.8A4 4 0 004 16z" fill="var(--text-faint)"/>',
+  rain: '<path d="M4 13h14a4 4 0 000-8 5.5 5.5 0 00-10.6 1.8A4 4 0 004 13z" fill="var(--text-faint)"/>'
+    + '<path d="M8 16l-1 3M12 16l-1 3M16 16l-1 3" stroke="var(--accent-cool)" stroke-width="1.6" stroke-linecap="round"/>',
+  snow: '<path d="M4 13h14a4 4 0 000-8 5.5 5.5 0 00-10.6 1.8A4 4 0 004 13z" fill="var(--text-faint)"/>'
+    + '<g stroke="var(--accent-cool)" stroke-width="1.4" stroke-linecap="round">'
+    + '<path d="M8 16v4M6 18h4"/><path d="M16 16v4M14 18h4"/></g>',
+  storm: '<path d="M4 12h14a4 4 0 000-8 5.5 5.5 0 00-10.6 1.8A4 4 0 004 12z" fill="var(--text-faint)"/>'
+    + '<path d="M13 12l-3 5h3l-2 5 6-7h-3l2-3z" fill="var(--accent-hero)"/>',
+};
+
+const HIGH_ICON = '<path d="M12 4l7 8h-4v8h-6v-8H5z" fill="var(--text-faint)"/>';
+const PRECIP_ICON = '<path d="M12 3c3.5 4.5 6 7.8 6 10.8A6 6 0 016 13.8C6 10.8 8.5 7.5 12 3z" fill="var(--accent-cool)" opacity="0.9"/>';
+
+function statHtml(svg, value) {
+  return `<div class="stat"><svg class="stat-icon" viewBox="0 0 24 24">${svg}</svg>`
+    + `<span class="stat-value">${esc(value)}</span></div>`;
+}
+
+function renderWeather(weather) {
+  if (!weather) { el.weatherStats.innerHTML = ''; return; }
+  const icon = CONDITION_ICONS[weather.condition] || CONDITION_ICONS.cloudy;
+  el.weatherStats.innerHTML =
+      statHtml(icon, `${Math.round(weather.tempF)}°`)
+    + statHtml(HIGH_ICON, `${Math.round(weather.highF)}°`)
+    + statHtml(PRECIP_ICON, `${Math.round(weather.precipChance)}%`);
+}
+
 /* ── mock data (browser-only fallback) ──────────────────────────────────── */
 
 /* Display labels and tints, keyed by PeripheralEvent.calendar — which is the
@@ -175,6 +217,14 @@ function mockState() {
   return {
     generatedAt: now.toISOString(),
     stale: false,
+    // Present in the mock for the same reason the all-day event is
+    // (2026-08-17 lesson, src/sources/gcal.js): a fixture that omits a shape
+    // real data has can't warn you about it. Real weather comes from
+    // src/sources/weather.js (NWS, Asheville) — this is browser-only.
+    weather: {
+      generatedAt: now.toISOString(), stale: false,
+      tempF: 72, highF: 78, precipChance: 20, condition: 'cloudy', conditionText: 'Partly Cloudy',
+    },
     events: [
       { id: 'm0', title: 'Ashley OOO', calendar: 'holidays', allDay: true,
         start: midnight.toISOString(), end: tomorrow.toISOString() },
@@ -218,8 +268,10 @@ async function loadState() {
 
 function render() {
   const now = new Date();
-  el.clock.textContent = fmtClock(now);
+  el.clock.textContent = fmtTime(now);
+  el.dateCaption.textContent = fmtDate(now);
   el.badge.hidden = !state?.stale;
+  renderWeather(state?.weather);
 
   if (!state?.events?.length) return renderEmpty(now);
 

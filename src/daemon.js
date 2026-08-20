@@ -59,7 +59,9 @@ import { Renderer } from './render.js';
 import { KEEPALIVE_INTERVAL_MS } from './transport/hid.js';
 import { PanelProxy } from './transport/panel-proxy.js';
 import { ApiProvider, collect } from './sources/gcal.js';
+import { NwsProvider } from './sources/weather.js';
 import { StateCache } from './cache.js';
+import { WeatherCache } from './weather-cache.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 /* What renderer.goto() reloads from — see watchPaneSource() below. */
@@ -73,16 +75,45 @@ const RENDER_INTERVAL_MS = Math.max(250, Math.round(1000 / FPS));
  * blip, short enough that you don't trust a genuinely dead feed. */
 const STALE_AFTER_MS = 5 * SOURCE_INTERVAL_MS;
 
+/* Weather doesn't need the calendar's cadence — NWS updates its gridded
+ * forecast roughly hourly, so polling every minute would just be load with
+ * no new information. */
+const WEATHER_INTERVAL_MS = 15 * 60_000;
+const WEATHER_STALE_AFTER_MS = 2 * WEATHER_INTERVAL_MS;
+
 /** Rebuild the browser after this many consecutive capture failures. */
 const RENDERER_REOPEN_AFTER = 5;
 
 /** Last successfully-built state. Survives source failures. */
 let lastGood = null;
 let consecutiveFailures = 0;
+/** Whether the currently-served calendar state should be flagged stale. */
+let calendarStale = false;
+
+/** Last successfully-fetched weather reading. Survives source failures. */
+let lastGoodWeather = null;
+let weatherConsecutiveFailures = 0;
 
 const cache = new StateCache();
+const weatherCache = new WeatherCache();
+const weatherProvider = new NwsProvider();
 /** @type {import('./sources/gcal.js').CalendarProvider[]} */
 let providers = [];
+
+/**
+ * Compose calendar + weather into the one object the pane fetches from
+ * /api/state. Weather is merged in regardless of which source refreshed —
+ * the two run on independent timers (see WEATHER_INTERVAL_MS vs
+ * SOURCE_INTERVAL_MS) and neither should have to wait on the other to be
+ * served. Does nothing until the calendar has produced a state at least
+ * once (from cache or a live fetch) — that's the existing /api/state 503
+ * contract the pane relies on to fall back to its mock agenda, and adding
+ * weather must not change what "no state yet" means.
+ */
+function publishState() {
+  if (!lastGood) return;
+  setState({ ...lastGood, stale: calendarStale || lastGood.stale, weather: lastGoodWeather });
+}
 
 /** The frame the push loop ships. Never null once the first capture lands. */
 let currentFrame = null;
@@ -148,8 +179,9 @@ async function refreshState() {
   try {
     const state = await collect(providers);
     lastGood = state;
+    calendarStale = false;
     consecutiveFailures = 0;
-    setState(state);
+    publishState();
     // Fire and forget — the cache must never be in the path of a render.
     void cache.save(state);
   } catch (err) {
@@ -161,7 +193,8 @@ async function refreshState() {
       // because no fetch has confirmed it in this process. Age alone would
       // clear the badge on a two-minute-old cache and quietly assert that
       // yesterday's leftovers are live.
-      setState({ ...lastGood, stale: lastGood.stale || age > STALE_AFTER_MS });
+      calendarStale = lastGood.stale || age > STALE_AFTER_MS;
+      publishState();
       console.warn(`[daemon] source failed (${consecutiveFailures}), serving last good`,
                    `(${Math.round(age / 1000)}s old):`, err.message);
     } else {
@@ -172,6 +205,30 @@ async function refreshState() {
       if (consecutiveFailures === 1 || consecutiveFailures % 10 === 0) {
         console.warn(`[daemon] no state yet (${consecutiveFailures}):`, err.message);
       }
+    }
+  }
+}
+
+async function refreshWeather() {
+  try {
+    const weather = await weatherProvider.fetchNow();
+    lastGoodWeather = weather;
+    weatherConsecutiveFailures = 0;
+    publishState();
+    void weatherCache.save(weather);
+  } catch (err) {
+    weatherConsecutiveFailures++;
+    if (lastGoodWeather) {
+      const age = Date.now() - new Date(lastGoodWeather.generatedAt).getTime();
+      lastGoodWeather = {
+        ...lastGoodWeather,
+        stale: lastGoodWeather.stale || age > WEATHER_STALE_AFTER_MS,
+      };
+      publishState();
+      console.warn(`[daemon] weather source failed (${weatherConsecutiveFailures}), `
+        + `serving last good (${Math.round(age / 60_000)}min old):`, err.message);
+    } else if (weatherConsecutiveFailures === 1 || weatherConsecutiveFailures % 10 === 0) {
+      console.warn(`[daemon] no weather yet (${weatherConsecutiveFailures}):`, err.message);
     }
   }
 }
@@ -352,13 +409,18 @@ async function main() {
    * and that is precisely the moment the panel is being looked at. Without
    * this the first frame is an empty agenda, which reads as "free day". */
   const cached = await cache.load();
-  if (cached) {
-    lastGood = cached;
-    setState(cached);
-  }
+  if (cached) lastGood = cached;
+
+  const cachedWeather = await weatherCache.load();
+  if (cachedWeather) lastGoodWeather = cachedWeather;
+
+  if (lastGood) publishState();
 
   await refreshState();
   setInterval(refreshState, SOURCE_INTERVAL_MS);
+
+  await refreshWeather();
+  setInterval(refreshWeather, WEATHER_INTERVAL_MS);
 
   // Transport first: if the panel is absent we still want the browser fallback
   // running, so this is a warning rather than a fatal error.
@@ -419,12 +481,14 @@ async function main() {
      * thread got a turn, and `lastPushMs` read 4ms. Drained each interval so
      * the number always describes THIS window. */
     const { pushMs: worstPush, slowRun } = panel.drainPeaks();
+    const weatherState = !lastGoodWeather ? 'none' : lastGoodWeather.stale ? 'stale' : 'ok';
     console.log(`[daemon] pushed=${panel.pushed} failed=${panel.failures} ` +
                 `frameAge=${age === null ? 'none' : age + 's'} ` +
                 `worstPush=${worstPush}ms loopLag=${lag}ms ` +
                 `${slowRun ? `slowRun=${slowRun} ` : ''}` +
                 `panel=${panel.state} ` +
-                `renderer=${renderer.healthy ? 'ok' : 'down'}` +
+                `renderer=${renderer.healthy ? 'ok' : 'down'} ` +
+                `weather=${weatherState}` +
                 `${panel.respawns ? ` respawns=${panel.respawns}` : ''}`);
   }, 30_000);
 }

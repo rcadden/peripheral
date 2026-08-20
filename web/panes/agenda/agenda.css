@@ -35,33 +35,40 @@ body {
 
 /* ── top bar ─────────────────────────────────────────────────────────────── */
 
+/* The bar is the body grid's own thin sibling: same three equal columns,
+   same divider language (border-left + padding-left, see .then/.agenda),
+   so "PERIPHERAL / weather / time" reads as one row of panels rather than
+   a logo with two afterthoughts hung off its right edge. Went through a
+   live round with Ricky 2026-08-19 before landing here — the first cut had
+   weather as a small aside next to a much bigger clock. */
 .bar {
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 30px;
   align-items: center;
-  justify-content: space-between;
-  /* Was a fixed 22px, which clipped the moment the bar type doubled
-     (2026-08-17). Content drives the height now; the body below is
-     `flex: 1 1 auto` and absorbs the difference. */
   flex: 0 0 auto;
 }
+
+.bar-panel { display: flex; align-items: center; gap: 14px; min-width: 0; }
+.bar-panel.weather, .bar-panel.time { border-left: 1px solid var(--rule); padding-left: 28px; }
+.bar-panel.time { justify-content: flex-end; }
 
 .mark {
   display: flex;
   align-items: center;
   gap: 9px;
-  font-size: 30px;
+  font-size: 26px;
   font-weight: 600;
-  letter-spacing: 0.34em;
+  letter-spacing: 0.3em;
   color: var(--text-faint);
 }
 
 /* The mark: a narrow bright bar at the edge of a dim one — the thing you
    catch in the corner of your eye. */
 .mark-glyph {
-  /* Scaled with the label, not asked for separately: a 13px square beside
-     30px type reads as a rendering bug rather than as a lockup. */
-  width: 26px;
-  height: 26px;
+  width: 22px;
+  height: 22px;
+  flex: 0 0 auto;
   background:
     linear-gradient(90deg,
       var(--accent-hero) 0 34%,
@@ -69,14 +76,37 @@ body {
       var(--text-faint) 52% 100%);
 }
 
-.bar-right { display: flex; align-items: center; gap: 14px; }
+/* Three co-equal stats, not a headline number with two footnotes. Ricky,
+   2026-08-19, after seeing a first pass with a big current temp and a small
+   faint "H 78 · L 61" caption: condition, high, and precip chance are all
+   things he wants "at a glance" — none of them gets demoted. Same size,
+   same weight, same color as each other AND as the clock opposite them. */
+.weather-stats { display: flex; align-items: center; gap: 18px; min-width: 0; }
+.stat { display: flex; align-items: center; gap: 7px; }
+.stat-icon { width: 20px; height: 20px; flex: 0 0 auto; }
+.stat-value {
+  font-size: 26px;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
 
+.time-figures { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; }
 .clock {
-  font-size: 34px;
-  letter-spacing: 0.2em;
-  color: var(--text-dim);
+  font-size: 26px;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  color: var(--text);
   font-variant-numeric: tabular-nums;
 }
+/* A caption, but not the old 13px/text-faint tier — Ricky, same session:
+   "small faint are going to be damn near illegible at 3ft." Still a step
+   below the headline numbers (this is secondary to the time), but text-dim
+   clears 4.5:1, not the 3:1 faint floor. */
+.date-caption { font-size: 16px; letter-spacing: 0.1em; color: var(--text-dim); }
 
 .badge {
   font-size: 13px;
