@@ -446,43 +446,51 @@ rather than designed upfront and shipped once.
       never cost a frame.** If a `goto()` plus font settle takes longer than the
       forget window, the previous pane's frame keeps shipping until the new one
       is ready. Never blank between panes.
-- [~] **Weather — built 2026-08-19, but NOT as a separate pane.** `NwsProvider`
-      (`src/sources/weather.js`) answered the open question here: free, keyless
-      NWS API (`api.weather.gov`), hardcoded to Ricky's actual address (grid
-      `GSP 54,73`, station `KAVL`) rather than geocoded at runtime, since the
-      install is fixed in one spot. Zero recurring cost. Wired into the daemon
-      on its own 15-min interval (`WEATHER_INTERVAL_MS`, independent of the
-      calendar's 60s), merged into `/api/state` via `publishState()`.
-      **But it landed inside the agenda pane's own top bar** — a redesign from
-      "logo + clock" into three co-equal panels (logo / weather / time) — not
-      as a standalone pane. Three live rounds with Ricky before landing: weather
-      promoted from a small aside to equal visual weight with the clock, its
-      three stats (temp/high/precip) made uniform with no demoted caption
-      tier, and the date caption bumped off an illegible-at-3ft faint size.
-      Verified 2026-08-19/20: 82 tests unchanged, `/api/state` serving real
-      weather data, DOM-clean at true 1280×480 (no overflow, no console
-      errors), **and confirmed on the glass** ("looks good") 2026-08-20.
-      **This satisfies the roadmap's original reasoning — weather as the
-      cheapest real proof that the panel can show more than the calendar —
-      but does NOT satisfy the literal ask of "a pane to cycle to."** Left
-      `[~]` rather than `[x]` for that reason. **NEEDS RICKY:** does
-      always-visible weather in the bar replace the need for a weather pane,
-      or does pane cycling still want a second pane to prove itself against
-      (and if so, what)? The closing condition below is stale until this is
-      answered.
+- [x] **Weather — built 2026-08-19, shipped in the bar rather than as a
+      separate pane, and Ricky decided 2026-08-20 that's the right shape,
+      not a compromise.** *"Having the weather in the header replaces the
+      need for a weather pane."* `NwsProvider` (`src/sources/weather.js`):
+      free, keyless NWS API (`api.weather.gov`), hardcoded to Ricky's actual
+      address (grid `GSP 54,73`, station `KAVL`) rather than geocoded at
+      runtime, since the install is fixed in one spot. Zero recurring cost.
+      Wired into the daemon on its own 15-min interval (`WEATHER_INTERVAL_MS`,
+      independent of the calendar's 60s), merged into `/api/state` via
+      `publishState()`. The bar redesigned from "logo + clock" into three
+      co-equal panels (logo / weather / time) through three live rounds with
+      Ricky: weather promoted from a small aside to equal visual weight with
+      the clock, its three stats (temp/high/precip) made uniform with no
+      demoted caption tier, and the date caption bumped off an
+      illegible-at-3ft faint size. Verified 2026-08-19/20: 82 tests
+      unchanged, `/api/state` serving real weather data, DOM-clean at true
+      1280×480, **and confirmed on the glass** ("looks good") 2026-08-20.
+      **The `NEEDS RICKY` question this item carried — does bar-embedded
+      weather replace the need for a weather pane — is answered: yes.**
+      Weather is not, and will not become, a cyclable pane. `focus.js` and
+      the cycling infrastructure below should not plan around it as one.
 
-**Closing condition, as originally written — now stale, not deleted:** ~~the
-panel cycles between agenda and weather, unattended, across a logon, with no
-blank frame at the switch and no flicker on the glass.~~ Weather no longer
-being a candidate pane means cycling needs a different second thing to prove
-itself against, or the closing condition needs rewriting around what a
-"pane" now means on this project. Open, per above.
+**Closing condition — rewritten 2026-08-20, the original is struck through per
+the no-tidying rule:** ~~the panel cycles between agenda and weather,
+unattended, across a logon, with no blank frame at the switch and no flicker
+on the glass.~~ Weather is decided out of the running as a pane, so cycling
+needs a genuinely different second pane to prove itself against — pull one
+forward from Sprint 4 (tomorrow's-first-event is the smallest; see below) or
+build a purpose-made proof pane. **New closing condition: the panel cycles
+between agenda and one other real pane, unattended, across a logon, with no
+blank frame at the switch and no flicker on the glass.** Which second pane is
+still open — see Sprint 4.
 
 ## Sprint 4 — More panes
 
 **The question: what else earns a pane?**
 
 *Was the second half of "Sprint 2 — More of life → New panes".*
+
+**One of these is now also Sprint 3's cycling target, decided 2026-08-20 when
+weather was confirmed to be staying in the bar rather than becoming a pane.**
+Whichever of the three below gets built first is the natural candidate —
+"Tomorrow's first event" is the smallest and could plausibly be built
+alongside pane cycling in one session rather than after it. Not yet decided
+which; flag when picking this up.
 
 Each of these is roughly one session and they are independent — order them by
 what Ricky actually wants to see, not by this list.
