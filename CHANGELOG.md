@@ -1264,6 +1264,16 @@ Ricky, after second panel support was dropped: *"one more thing to add to the UI
 
 **New `test/weather-location.test.js`** (`WeatherLocationStore` only — round-trip, corrupt-file, wrong-version, atomic-write-leaves-no-tmp-file cases, mirroring `cache.test.js`). No test makes a live network call, matching this repo's existing convention (`weather.js` itself has never had unit tests either) — `resolveZip`/`resolveGrid`/`resolveZipToGrid`'s correctness was verified live against the real APIs during development, recorded above. 110 tests total, was 103.
 
+### Changed — repo flipped public, Sprint 5 closed (2026-08-20)
+
+The sequence, at Ricky's explicit direction, not assumed: he reviewed `dev` on GitHub himself first (*"let me look at the fully updated repo directly in Github before you push it public"*) — `dev` was 37 commits ahead of `main` at that point, all of Sprint 5's work. Then had `main` fast-forwarded to match while staying private (*"catch main up to dev but keep it private"*) — confirmed via `gh repo view`: `isPrivate: true` immediately after. Reviewed again, then gave the actual instruction: *"go ahead and make it public."*
+
+**Immediately before the flip:** added `LICENSE` (MIT, copyright Ricky Cadden 2026), added `license`/`repository` fields to `package.json` (`"private": true` deliberately left alone — that flag is about npm-publish protection, unrelated to GitHub visibility, and still correct since this was never meant to be published to the npm registry). README's License section changed from "MIT, applied when this repo goes public" to a direct link now that it actually is. Re-ran the full-history secret scan one final time, structural checks only (pattern counts, commit/file provenance — never printing a raw match, per the dated Lessons Learned entry from earlier this same session): identical clean result to the first pass — `.env` never committed in any commit ever, no secret-shaped filenames ever added, 2 pattern matches total, both traced to `.claude/skills/session-close/SKILL.md`'s own documented grep command text, not a real secret.
+
+**Flipped via `gh repo edit rcadden/peripheral --visibility public --accept-visibility-change-consequences`**, confirmed via `gh repo view --json visibility,isPrivate,url`: `{"isPrivate":false,"visibility":"PUBLIC","url":"https://github.com/rcadden/peripheral"}`.
+
+**Sprint 5 — Polish and release is closed.** Every item shipped or was honestly dropped with a stated reason: colour palette rework, colour picker, one-command setup, README with a real (privacy-reviewed) photo, and the weather-location picker (added mid-sprint) all done; second panel support dropped for lack of hardware, not silently abandoned.
+
 ## Decisions worth not relitigating
 
 Recorded here so they survive a cold start. Full reasoning lives in `CLAUDE.md`.

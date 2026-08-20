@@ -696,21 +696,32 @@ unchanged. Any earlier reference to "Sprint 3 — Polish and release" means this
       this repo makes live network calls, matching the existing convention;
       `resolveZip`/`resolveGrid` were verified live during development
       instead, recorded above). 110 tests total, was 103.
-- [ ] **Public repo, MIT — LAST, on purpose.** Ricky, 2026-08-20, after a
-      proposal to trim scope and flip public early was turned down: *"first I
-      want to finish the items in the roadmap, then we can do all of this as
-      the last/final step."* ~~Full scope stays — colour picker and second
-      panel support are not being deferred past the public flip.~~
-      **Superseded same day:** second panel support dropped for a genuine
-      reason (no hardware to test against), not deferred — see above. Colour
-      picker, README, and one-command setup all shipped in full, so this
-      sprint still closes with everything actually buildable done before the
-      public flip, which was the substance of Ricky's original instruction.
-      The full-history secret scan already run 2026-08-20 came back clean
-      (`.env` never committed, no OAuth client secrets or refresh tokens
-      anywhere in git history) — worth re-running once more immediately
-      before the actual flip, since more commits will land between now and
-      then.
+- [x] **Public repo, MIT — DONE 2026-08-20, LAST, on purpose.** Ricky,
+      earlier the same day, after a proposal to trim scope and flip public
+      early was turned down: *"first I want to finish the items in the
+      roadmap, then we can do all of this as the last/final step."* ~~Full
+      scope stays — colour picker and second panel support are not being
+      deferred past the public flip.~~ **Superseded same day:** second panel
+      support dropped for a genuine reason (no hardware to test against),
+      not deferred — see above. Colour picker, README, one-command setup,
+      and the weather-location picker all shipped in full, so this sprint
+      closed with everything actually buildable done before the public
+      flip, which was the substance of Ricky's original instruction.
+      **Sequence, at Ricky's explicit direction:** reviewed `dev` on GitHub
+      himself first (*"let me look at the fully updated repo directly in
+      Github before you push it public"*), then had `main` fast-forwarded
+      to match `dev` while staying private (*"catch main up to dev but keep
+      it private"*), reviewed again, then gave the actual go: *"go ahead and
+      make it public."* Immediately before the flip: `LICENSE` (MIT) added,
+      `package.json` gained `license`/`repository` fields, README's License
+      section updated from "applied when public" to a direct link, and the
+      full-history secret scan re-run one final time — same clean result as
+      the first pass (`.env` never committed, 2 pattern matches total, both
+      traced to a skill file's own documented grep command, not a real
+      secret). Flipped via `gh repo edit --visibility public
+      --accept-visibility-change-consequences`, confirmed via `gh repo
+      view`: `https://github.com/rcadden/peripheral` is public.
+      **Sprint 5 is closed.**
 
 ## Future Explorations
 - **Tomorrow's first event when today is done — moved here 2026-08-20** from

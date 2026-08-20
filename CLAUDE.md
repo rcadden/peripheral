@@ -102,6 +102,18 @@ See `directives/roadmap.md`'s Sprint 5 entry for the full verification list
 and the one honestly-scoped gap (picker choices aren't re-applied by the
 bare CLI, only by the picker's own Save path).
 
+**Sprint 5 closed 2026-08-20 — the repo is public.** One-command setup
+(`npm run setup`), a rewritten README with a privacy-reviewed real photo,
+and a weather-location picker (zip code → NWS grid, same free/keyless
+pattern as the colour picker, added mid-sprint on request) all shipped.
+Second panel support was dropped, not silently — no hardware to build
+against. Ricky reviewed `dev` on GitHub directly, had `main` fast-forwarded
+to match while staying private, reviewed again, then gave the flip:
+*"go ahead and make it public."* `LICENSE` (MIT) added, a final full-history
+secret scan came back clean, and `gh repo edit --visibility public` made it
+real — confirmed via `gh repo view`. **Repo:**
+[`github.com/rcadden/peripheral`](https://github.com/rcadden/peripheral).
+
 <!-- Superseded 2026-08-17, kept per the no-tidying rule: -->
 <details><summary>Previous status (pre-OAuth)</summary>
 Sprint 1 — Foundation, essentially complete. Hardware arrived and works; the
@@ -254,15 +266,15 @@ those diverge, the fallback stops being trustworthy.
   Peripheral holds a single token. See Environment.
 
 ## Environment & Credentials
-Secrets live in `.env` (gitignored) and a local token store. **This repo goes
-public when it's done**, so nothing real is ever committed. `.env.example` is
-the contract.
+Secrets live in `.env` (gitignored) and a local token store. **This repo is
+public** (since 2026-08-20), so nothing real is ever committed. `.env.example`
+is the contract.
 
 | Value | Status |
 |---|---|
 | Google OAuth client ID / secret | **NOT YET CREATED.** Create as **Desktop app** in a *personal* Cloud project, not Balcom's. Flow is written — `npm run auth`. **`.env` now exists with these two lines blank**; fill them in there. |
 | Repo location | **`C:\dev\peripheral`** — deliberately NOT in OneDrive. See Lessons Learned. |
-| Remote | `github.com/rcadden/peripheral` — **private** until the release sprint (**Sprint 5**, was Sprint 3 before the 2026-08-18 renumber), then public. |
+| Remote | [`github.com/rcadden/peripheral`](https://github.com/rcadden/peripheral) — **public since 2026-08-20** (was private through Sprint 5, per the original plan). Treat every commit as public from now on — history isn't cleaned retroactively. |
 | Token store | `%LOCALAPPDATA%\Peripheral\tokens.json` — **outside the repo on purpose.** A refresh token has no business in a project directory. Override with `PERIPHERAL_TOKEN_PATH`. |
 | Personal calendar | `grcadden@gmail.com` — confirmed reachable. Also natively shared **into** the work calendar, which is how the primary gets it. |
 | Work calendar (Balcom) | **PRIMARY account — critical path.** Direct OAuth, untested. Sharing work→personal is confirmed blocked; see below. |
