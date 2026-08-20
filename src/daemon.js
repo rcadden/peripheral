@@ -62,6 +62,7 @@ import { ApiProvider, collect } from './sources/gcal.js';
 import { NwsProvider } from './sources/weather.js';
 import { StateCache } from './cache.js';
 import { WeatherCache } from './weather-cache.js';
+import { WeatherLocationStore } from './weather-location.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 /* What renderer.goto() reloads from — see watchPaneSource() below. */
@@ -96,7 +97,13 @@ let weatherConsecutiveFailures = 0;
 
 const cache = new StateCache();
 const weatherCache = new WeatherCache();
-const weatherProvider = new NwsProvider();
+const weatherLocationStore = new WeatherLocationStore();
+/* Reassigned, not mutated in place — a picker-saved location becomes a whole
+ * new NwsProvider rather than patching fields on the running one, so a
+ * fetch already in flight against the OLD grid can't be half-overwritten
+ * mid-request. Starts on the pinned install default (see weather.js) unless
+ * a saved location already exists at boot — see applyLocationIfChanged(). */
+let weatherProvider = new NwsProvider();
 /** @type {import('./sources/gcal.js').CalendarProvider[]} */
 let providers = [];
 
@@ -209,7 +216,30 @@ async function refreshState() {
   }
 }
 
+/**
+ * Pick up a picker-saved weather location, if one exists and differs from
+ * what's currently in use. Cheap (one small local JSON read) — called at the
+ * top of every refreshWeather(), not just at boot, so a location saved via
+ * the picker takes effect on the very next refresh without a daemon restart.
+ * Immediate application (rather than waiting up to WEATHER_INTERVAL_MS) comes
+ * from watchWeatherLocation() below triggering an out-of-cycle refreshWeather()
+ * call right after a save.
+ */
+async function applyLocationIfChanged() {
+  const saved = await weatherLocationStore.load();
+  if (!saved) return;
+  const same = saved.gridId === weatherProvider.gridId
+    && saved.gridX === weatherProvider.gridX
+    && saved.gridY === weatherProvider.gridY
+    && saved.stationId === weatherProvider.stationId;
+  if (same) return;
+  weatherProvider = new NwsProvider(saved);
+  console.log(`[daemon] weather location updated: ${saved.city}, ${saved.state} `
+    + `(zip ${saved.zip}) — grid ${saved.gridId}/${saved.gridX},${saved.gridY}, station ${saved.stationId}`);
+}
+
 async function refreshWeather() {
+  await applyLocationIfChanged();
   try {
     const weather = await weatherProvider.fetchNow();
     lastGoodWeather = weather;
@@ -378,6 +408,34 @@ async function reloadPaneWithRetry(reason, attemptsLeft = 6) {
  * log shows repeating `pane threw` after an edit, touch any file in web/
  * again to force a clean reload.
  */
+/**
+ * Watch weather-location.json and trigger an immediate out-of-cycle
+ * refreshWeather() when the picker saves a new one — same shape as
+ * watchPaneSource() below, and for the same reason: without this, a saved
+ * location would sit unapplied for up to WEATHER_INTERVAL_MS (15 min)
+ * because applyLocationIfChanged() only runs at the TOP of refreshWeather(),
+ * not on its own timer. Debounced for the same reason the pane watcher is —
+ * an atomic temp-then-rename write (see WeatherLocationStore.save()) can
+ * still surface as more than one fs event on some filesystems.
+ */
+function watchWeatherLocation() {
+  const targetDir = path.dirname(weatherLocationStore.filePath);
+  const targetName = path.basename(weatherLocationStore.filePath);
+  let timer = null;
+  try {
+    watch(targetDir, (_event, filename) => {
+      if (filename && filename !== targetName) return;
+      clearTimeout(timer);
+      timer = setTimeout(() => void refreshWeather(), 300);
+    });
+    console.log(`[daemon] watching ${weatherLocationStore.filePath} for a picker-saved location`);
+  } catch (err) {
+    // Not fatal — the location still applies on the next scheduled
+    // refreshWeather() tick either way, just up to 15 minutes later.
+    console.warn(`[daemon] weather-location file watch not available: ${err.message}`);
+  }
+}
+
 function watchPaneSource() {
   let timer = null;
   try {
@@ -454,6 +512,7 @@ async function main() {
   setInterval(renderTick, RENDER_INTERVAL_MS);
 
   watchPaneSource();
+  watchWeatherLocation();
 
   console.log(`[daemon] running — render every ${RENDER_INTERVAL_MS}ms on this ` +
               `thread, push every ${KEEPALIVE_INTERVAL_MS}ms on the transport ` +

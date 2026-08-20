@@ -176,6 +176,14 @@ saveBtn.addEventListener('click', async () => {
 });
 
 buildControls();
-// Wait for the preview iframe to finish its own load before the first
-// applyToIframe() call — contentDocument is only reliably ready after this.
-iframe.addEventListener('load', loadInitial, { once: true });
+// Found 2026-08-20: gating loadInitial() behind the iframe's own 'load'
+// event is a race, not a guarantee — on a page with enough content above
+// the iframe (the weather-location section pushed it further down), the
+// iframe can finish loading and fire 'load' before this listener even
+// attaches, silently skipping loadInitial() forever with no error. It
+// doesn't need to wait: applyToIframe() already guards on
+// `iframe.contentDocument` being non-null, and a same-origin iframe's
+// document object exists as soon as the element does, well before its
+// content finishes loading — setting a CSS custom property on
+// documentElement works mid-load same as after. Call it directly.
+loadInitial();

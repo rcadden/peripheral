@@ -643,6 +643,59 @@ unchanged. Any earlier reference to "Sprint 3 — Polish and release" means this
       actually be verified against real hardware yet. Not deleted, struck
       through per the no-tidying rule; revisit if the second panel is ever
       bought.
+- [x] **Weather-location picker — DONE 2026-08-20, added mid-sprint.** Ricky:
+      *"a place for someone else to change the weather location. Up to you
+      if that needs to be just a zip code, or a full address search, or
+      require them to put in a lat/lon."* Chose zip code: a full-address
+      geocoder with real precision needs a paid/keyed API (breaks the "free,
+      keyless" principle `weather.js` already established); raw lat/lon is
+      more precise but nobody has their coordinates memorized. Verified
+      live before building anything — two free, keyless hops, both hit for
+      real during design: **Zippopotam.us** (zip → lat/lon, confirmed no key
+      needed) then **api.weather.gov/points** (lat/lon → grid + nearest
+      station), the exact chain Ricky's own install was resolved through by
+      hand. New `src/weather-location.js` (`resolveZip`/`resolveGrid`/
+      `resolveZipToGrid`, plus `WeatherLocationStore` mirroring `cache.js`'s
+      atomic-write pattern, saved at `%LOCALAPPDATA%\Peripheral\weather-
+      location.json`). New UI section on the existing `/settings/palette/`
+      page (renamed on-page to "Settings," URL unchanged) — a zip field and
+      a single "Look up & save" button, not a live-drag preview like the
+      colour sliders, since a zip is a discrete submitted value, not
+      something dragged.
+      **Reactivity solved without a circular import.** `server.js` already
+      can't import from `daemon.js` (the dependency runs the other way), so
+      immediate application couldn't reuse the palette picker's "just call
+      regenerate()" trick directly. Fixed by giving `daemon.js` a second
+      `fs.watch`, on `weather-location.json`, mirroring the exact mechanism
+      that already reloads the agenda pane on a `web/` edit — a picker save
+      writes the file, the daemon notices and reconstructs its
+      `NwsProvider` and re-fetches, same-process, no restart, confirmed live
+      within about a second.
+      **A real discrepancy surfaced and was fixed during verification, not
+      silently found later:** the live resolution for Ricky's own zip
+      (28806) landed on grid `54,74`, one cell off his hand-resolved `54,73`
+      — expected and disclosed in the UI copy (a zip centroid is not an
+      exact address), not a bug. Separately, the picker's *colour*
+      overrides file was found holding a stale `hero: 215` instead of the
+      approved `212` when this work started — traced to page interaction
+      during earlier same-session verification, not this feature, but
+      caught and corrected here since it was live at the time. `web/
+      tokens.css` on disk was never wrong; only the picker's own default-on-
+      load value was momentarily stale.
+      **One real bug found and fixed in the existing colour-picker code**
+      while verifying the two features together on one page: adding the new
+      section shifted page layout enough that the iframe's `load` event
+      started firing before `palette.js` attached its listener for it,
+      silently skipping the picker's own initial value population with no
+      console error. Not a race specific to this feature — a pre-existing
+      fragility this change happened to expose. Fixed by calling
+      `loadInitial()` directly instead of gating it on the iframe's `load`
+      event, which it never actually needed (`contentDocument` exists as
+      soon as the iframe element does).
+      Tests: `test/weather-location.test.js` (the store only — no test in
+      this repo makes live network calls, matching the existing convention;
+      `resolveZip`/`resolveGrid` were verified live during development
+      instead, recorded above). 110 tests total, was 103.
 - [ ] **Public repo, MIT — LAST, on purpose.** Ricky, 2026-08-20, after a
       proposal to trim scope and flip public early was turned down: *"first I
       want to finish the items in the roadmap, then we can do all of this as

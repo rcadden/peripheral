@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Peripheral — Colour Picker</title>
+<title>Peripheral — Settings</title>
 <link rel="stylesheet" href="/tokens.css">
 <link rel="stylesheet" href="./palette.css">
 </head>
@@ -19,7 +19,31 @@
 
   <header class="picker-head">
     <div class="mark"><span class="mark-glyph"></span>PERIPHERAL</div>
-    <h1>Colour picker</h1>
+    <h1>Settings</h1>
+  </header>
+
+  <section class="section-block">
+    <h2>Weather location</h2>
+    <p class="sub">
+      Resolved from a US zip code — <a href="https://www.zippopotam.us/" target="_blank" rel="noopener">Zippopotam.us</a>
+      turns it into coordinates, then <a href="https://www.weather.gov/documentation/services-web-api" target="_blank" rel="noopener">api.weather.gov</a>
+      turns those into a forecast grid and the nearest observation station —
+      the same two free, keyless steps this install's own default location was
+      resolved through by hand. A zip's centre point isn't your exact address
+      (it can land a mile or two off), which is fine for a forecast grid cell
+      but worth knowing.
+    </p>
+    <div class="location-row">
+      <input type="text" id="zipInput" inputmode="numeric" pattern="[0-9]{5}"
+             maxlength="5" placeholder="28806" aria-label="US zip code">
+      <button id="zipSaveBtn" type="button">Look up &amp; save</button>
+      <span class="status" id="zipStatus"></span>
+    </div>
+    <div class="location-current" id="locationCurrent"></div>
+  </section>
+
+  <section class="section-block">
+    <h2>Colour picker</h2>
     <p class="sub">
       The contrast gate is never optional — every swatch below is the exact
       same math the panel itself uses (<code>src/palette.js</code>), so a
@@ -27,23 +51,24 @@
       broken. Preview happens instantly against the real pane on the right;
       nothing is written to disk until you press Save.
     </p>
-  </header>
 
-  <div class="layout">
-    <section class="controls" id="controls" aria-label="Colour controls"></section>
+    <div class="layout">
+      <div class="controls" id="controls" aria-label="Colour controls"></div>
 
-    <section class="preview-wrap">
-      <div class="preview-frame">
-        <iframe id="preview" src="/panes/agenda/" title="Live pane preview"></iframe>
+      <div class="preview-wrap">
+        <div class="preview-frame">
+          <iframe id="preview" src="/panes/agenda/" title="Live pane preview"></iframe>
+        </div>
+        <div class="save-row">
+          <button id="saveBtn" type="button">Save</button>
+          <span class="status" id="status"></span>
+        </div>
       </div>
-      <div class="save-row">
-        <button id="saveBtn" type="button">Save</button>
-        <span class="status" id="status"></span>
-      </div>
-    </section>
-  </div>
+    </div>
+  </section>
 
 </main>
+<script type="module" src="./weather-location.js"></script>
 <script type="module" src="./palette.js"></script>
 </body>
 </html>

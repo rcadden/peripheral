@@ -28,10 +28,44 @@ body {
 }
 
 .picker-head h1 { font-size: 26px; font-weight: 600; }
-.picker-head .sub { font-size: 14px; line-height: 1.6; color: var(--text-dim); max-width: 720px; }
-.picker-head code { color: var(--text); }
+
+/* ── shared section chrome ────────────────────────────────────────────── */
+
+.section-block {
+  display: flex; flex-direction: column; gap: 14px;
+  padding-top: 24px; border-top: 1px solid var(--rule);
+}
+.section-block h2 { font-size: 16px; font-weight: 600; letter-spacing: 0.03em; }
+.sub { font-size: 14px; line-height: 1.6; color: var(--text-dim); max-width: 720px; }
+.sub code { color: var(--text); }
+.sub a { color: var(--accent-cool); }
 
 .layout { display: grid; grid-template-columns: 360px 1fr; gap: 32px; align-items: start; }
+
+/* ── weather location ─────────────────────────────────────────────────── */
+
+.location-row { display: flex; align-items: center; gap: 12px; }
+#zipInput {
+  font-family: var(--font-mono); font-size: 14px;
+  width: 8em; padding: 9px 12px;
+  background: var(--ground-2); color: var(--text);
+  border: 1px solid var(--rule); border-radius: 4px;
+  letter-spacing: 0.05em;
+}
+#zipInput:focus { outline: 1px solid var(--accent-hero); outline-offset: -1px; }
+#zipSaveBtn {
+  font-family: var(--font-mono);
+  font-size: 14px; font-weight: 600; letter-spacing: 0.05em;
+  padding: 9px 18px;
+  background: var(--accent-cool); color: var(--ground);
+  border: none; border-radius: 4px; cursor: pointer;
+}
+#zipSaveBtn:active { opacity: 0.85; }
+#zipSaveBtn:disabled { opacity: 0.5; cursor: default; }
+
+.location-current { font-size: 13px; color: var(--text-dim); line-height: 1.6; }
+.location-current .place { color: var(--text); font-weight: 600; }
+.location-current .reading { color: var(--accent-calendar-work); }
 
 /* ── controls ─────────────────────────────────────────────────────────── */
 

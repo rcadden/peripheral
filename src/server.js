@@ -18,6 +18,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { sampleWallpaper, deriveTokens, regenerate } from './palette.js';
 import { PaletteOverridesStore, mergeHues } from './palette-overrides.js';
+import { WeatherLocationStore, resolveZipToGrid } from './weather-location.js';
+import { NwsProvider } from './sources/weather.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const WEB_ROOT = path.resolve(__dirname, '..', 'web');
@@ -110,6 +112,60 @@ async function handlePaletteSave(req, res) {
   }
 }
 
+/* Weather-location plumbing (added 2026-08-20) — same pattern as the
+ * palette overrides above: one store instance for the process lifetime,
+ * every call re-reads the file. This module never touches the daemon's own
+ * `weatherProvider` — see daemon.js's applyLocationIfChanged() and
+ * watchWeatherLocation(), which pick up a saved location by watching this
+ * same file rather than server.js reaching into daemon.js directly. Keeping
+ * that edge one-directional (daemon.js already imports server.js; the
+ * reverse would be circular) is why the coupling is a file-watch and not a
+ * function call. */
+const weatherLocation = new WeatherLocationStore();
+
+async function handleWeatherLocationGet(req, res) {
+  const location = await weatherLocation.load();
+  res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' })
+    .end(JSON.stringify({ location }));
+}
+
+async function handleWeatherLocationSave(req, res) {
+  let body = '';
+  try {
+    for await (const chunk of req) {
+      body += chunk;
+      if (body.length > 1024) {
+        res.writeHead(413).end('too large');
+        return;
+      }
+    }
+    const parsed = JSON.parse(body);
+    if (typeof parsed.zip !== 'string') {
+      res.writeHead(400, { 'content-type': 'application/json' })
+        .end(JSON.stringify({ error: 'expected {"zip": "12345"}' }));
+      return;
+    }
+
+    // Resolve BEFORE persisting — an invalid zip or an NWS/geocoder hiccup
+    // must never overwrite a working saved location with a broken one.
+    const location = await resolveZipToGrid(parsed.zip);
+    await weatherLocation.save(location);
+
+    // One live confirmation read, so the response proves the new location
+    // actually works rather than just that it resolved to A grid cell —
+    // the same "accepted is not displayed" caution this project applies to
+    // the HID transport applies here: a resolved grid ID is not proof NWS
+    // will actually return a reading for it.
+    const weather = await new NwsProvider(location).fetchNow();
+
+    res.writeHead(200, { 'content-type': 'application/json' })
+      .end(JSON.stringify({ location, weather }));
+  } catch (err) {
+    res.writeHead(err instanceof SyntaxError ? 400 : 502, { 'content-type': 'application/json' })
+      .end(JSON.stringify({ error: err.message }));
+  }
+}
+
 async function serveStatic(req, res, urlPath) {
   // Resolve inside WEB_ROOT and verify — cheap defence against traversal.
   let rel = decodeURIComponent(urlPath).replace(/^\/+/, '');
@@ -140,16 +196,22 @@ async function serveStatic(req, res, urlPath) {
 const server = http.createServer(async (req, res) => {
   const { pathname, searchParams } = new URL(req.url, `http://${HOST}:${PORT}`);
 
-  // The one POST route in this server, matched before the blanket GET-only
+  // The POST routes in this server, matched before the blanket GET-only
   // gate below — everything else stays GET-only, unchanged.
   if (req.method === 'POST' && pathname === '/api/palette/save') {
     return void handlePaletteSave(req, res);
+  }
+  if (req.method === 'POST' && pathname === '/api/weather-location') {
+    return void handleWeatherLocationSave(req, res);
   }
 
   if (req.method !== 'GET') return void res.writeHead(405).end('method not allowed');
 
   if (pathname === '/api/palette/preview') {
     return void handlePalettePreview(req, res, searchParams);
+  }
+  if (pathname === '/api/weather-location') {
+    return void handleWeatherLocationGet(req, res);
   }
 
   if (pathname === '/api/state') {
