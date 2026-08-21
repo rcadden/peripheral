@@ -24,8 +24,8 @@ from `.gitignore` for it.*
 
 ## Hardware
 
-[Thermalright Trofeo Vision LCD 6.86"](https://www.amazon.com/dp/B0GYKJZT2F) —
-$37.90, 1280×480, USB-C, magnetic back.
+[Thermalright Trofeo Vision LCD 6.86"](https://amzn.to/4gwxt1w) —
+$37.90, 1280×480, USB-C, magnetic back. *Affiliate link*
 
 **It is not a monitor.** It enumerates as a USB HID device (`0416:5302`) and you
 push JPEG frames to it. Your OS will never show it as a second display. Skip the
