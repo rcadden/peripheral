@@ -52,6 +52,14 @@ sprint gates they only made a sprint look stalled.
   **Ricky does not think it's the cable** — asked directly what he suspects
   instead; no answer yet. Recorded as open, not resolved either direction. Do
   not swap the cable or otherwise act on the cable theory without his sign-off.
+  **Correction 2026-08-24: the 31-minute outage that morning was NOT a panel
+  event and must not be counted on this curve.** The panel was on its vendor
+  logo because the daemon process was gone, which is the panel behaving
+  exactly as designed — it forgets ~3s after the last frame. Counting it as
+  hardware would have made a software supervision bug look like the third
+  strike against the unit. **Before adding anything to this curve, confirm the
+  daemon was actually alive and pushing at the time** (`npm run
+  startup:status`, and the heartbeat in `daemon.log`).
 - **Cadence on a genuinely busy machine.** `npm run stall-test` proves the main
   thread survives a blocked transport; it does not prove the transport keeps 1
   fps while a Teams call and a build are running. Watch `worstPush` and the
@@ -59,6 +67,18 @@ sprint gates they only made a sprint look stalled.
 - **Whether `terminate()` interrupts a real wedged `node-hid` write.**
   Unknowable without a real wedge; `Atomics.wait` is a V8-level block and a
   stuck driver call is not. The respawn does not depend on it.
+- **Whether the supervision chain catches a real unattended death — added
+  2026-08-24.** Every recovery path was verified by killing the daemon by
+  hand in a live session (see Sprint 6). None of it has yet survived what
+  actually happened on 2026-08-24: a death at 07:47:16 with nobody at the
+  desk. The watchdog is on a 5-minute interval, so the evidence will be a
+  gap in `watchdog.log` followed by a `DEAD`/`recovered` pair — **check
+  `npm run watchdog:logs` after any morning the panel looked wrong.** Cannot
+  be closed by working on it; it needs an unattended failure to occur.
+- **The cause of the 2026-08-24 07:47:16 death is still unknown.** Not a
+  panel failure, not a crash, not a reboot — see the correction in the
+  hardware-failure-curve item above. If it recurs, `watchdog.log` now
+  timestamps it, which is more than existed the first time.
 
 ## Sprint 1 — Foundation
 - [x] Identify the hardware and its actual interface (HID `0416:5302`, not a monitor)
@@ -722,6 +742,86 @@ unchanged. Any earlier reference to "Sprint 3 — Polish and release" means this
       --accept-visibility-change-consequences`, confirmed via `gh repo
       view`: `https://github.com/rcadden/peripheral` is public.
       **Sprint 5 is closed.**
+
+## Sprint 6 — Supervision — **opened and largely closed 2026-08-24**
+
+Opened unplanned, by a failure. Sprint 5 closed with the repo public and the
+daemon apparently solid; the next morning the panel was on its vendor logo and
+had been for 31 minutes. The theme is narrow on purpose and fits one session:
+**nothing was watching the daemon, and nothing could have been.**
+
+The root cause was not in the daemon at all. `hidden.vbs` launched it with
+`WScript.Shell.Run`'s don't-wait flag, so `wscript.exe` exited 0 about a second
+after logon. Task Scheduler watches *that* process, so the task read
+`Ready / LastTaskResult 0` for the whole hour the daemon ran **and** for the
+half hour it was dead. The task's `RestartOnFailure 3x1min` was bound to a
+process that always succeeded immediately — it could never fire, and never had.
+
+- [x] **Propagate the daemon's real exit code — DONE 2026-08-24.**
+      `run-daemon.cmd` reported `%ERRORLEVEL%` with an `echo`, and `echo`
+      succeeding is what resets `%ERRORLEVEL%` to 0 — reporting the exit code
+      destroyed it. Captured before the echo, returned with `exit /b`.
+      Measured: task result is now `4294967295` on a killed daemon, was `0`.
+- [x] **Make the launcher the supervisor — DONE 2026-08-24.** `hidden.vbs`
+      now waits, so the task instance IS the daemon's lifetime (`Running` /
+      `267009` while healthy), and relaunches on a crash itself.
+      *First attempt was wrong and the test caught it:* the fix originally
+      stopped at wait-and-propagate, assuming an honest non-zero result would
+      let `RestartOnFailure` do the restarting. **It does not.** Verified with
+      the watchdog disabled so nothing else could take credit — killed
+      08:33:14, task result correct, still `Ready` two minutes later with
+      nothing restarted. **Task Scheduler's restart-on-failure responds to a
+      task that fails to LAUNCH, not to an action returning non-zero.** The
+      setting stays registered (it costs nothing and covers the launch case)
+      but it is not what brings the daemon back. The relaunch loop lives in
+      `hidden.vbs`: ~10s to return, exit code 0 left alone because that is the
+      deliberate-shutdown path, and five failures inside a minute each stops
+      the loop rather than crash-spinning.
+- [x] **Liveness watchdog — DONE 2026-08-24.** `scripts/watchdog.vbs`,
+      registered as a second task every 5 minutes plus logon+3m. Asks the
+      question that still has an answer once the process is gone: not "did it
+      report a failure" but "is it answering." Probes `/api/health` three
+      times over 20s before acting, then `schtasks /end`, an orphan sweep
+      **filtered on the command line and never the image name** (`taskkill /im
+      node.exe` would kill every unrelated node process on the machine), then
+      `schtasks /run`.
+      **Deliberately not decided on `daemon.log`'s mtime.** NTFS defers
+      last-write-time updates for open files, so a healthy daemon can look
+      stale and get killed on a schedule. The test run proved the inverse too:
+      the log read `0s old` while the daemon was dead, because the exit banner
+      had just been written to it. A signal that is usually right is not a
+      safe basis for something that kills a process.
+- [x] **A trigger for the recovery path — DONE 2026-08-24.** `npm run
+      watchdog:test` forces the real end/sweep/run sequence against the real
+      daemon. Same standing rule as `idle-test` and `stall-test`: fault
+      injection belongs in the product, because a recovery path that cannot be
+      triggered on demand stays unverified until the night it is needed.
+- [x] **Make `startup:status` tell the truth — DONE 2026-08-24.** It now
+      warns when the task reads `Ready` while the daemon is alive, which is
+      precisely the unsupervised state that existed all morning, and reports
+      the watchdog task and its last check alongside.
+
+**Verified by killing the real daemon, not by reading code:** probe path
+(killed 08:31:48 → `DEAD` after 3 failed probes → recovered 08:32:46, ~58s
+outage); relaunch path (killed 08:37:42 → back 08:37:53, `watchdog.log` silent
+throughout, so attribution is unambiguous); watchdog repetition (five
+consecutive scheduled firings 08:40–09:00, all result 0). `npm test` 110/110,
+though none of those tests cover this session's code — VBS and task
+registration have no meaningful test surface.
+
+**Written but NOT verified, carried forward honestly:**
+- [ ] The `MAX_FAST_FAILS` give-up path. One relaunch was tested, not the cap
+      of five-failures-inside-a-minute-each.
+- [ ] `Probe()`'s fail-safe branch (ServerXMLHTTP unavailable → treat as
+      healthy, so a broken probe can never trigger a restart loop). Never
+      triggered.
+- [ ] Recovery across a real logon. Everything was exercised by running tasks
+      by hand in an existing session.
+- [ ] **Whether 5 minutes is the right watchdog interval.** A death the
+      launcher cannot catch — a whole-tree kill, which is what 2026-08-24
+      looked like — means a worst-case ~5.5 minute dark panel. Raised with
+      Ricky at session close; he did not ask for it to change, so it stays.
+      Revisit if a real unattended outage lasts long enough to annoy him.
 
 ## Future Explorations
 - **Tomorrow's first event when today is done — moved here 2026-08-20** from

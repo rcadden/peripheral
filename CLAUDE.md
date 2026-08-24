@@ -126,8 +126,24 @@ waiting. `npm run auth` is the experiment, and it tests Workspace policy and
 the entire fetch path in one go.
 </details>
 
+**Sprint 6 — Supervision — opened and closed 2026-08-24, by a failure.** The
+morning after Sprint 5 shipped the public repo, the panel was on its vendor
+logo and had been for 31 minutes. The daemon had died at 07:47:16 mid-stream
+and **nothing restarted it, because nothing could have.** `hidden.vbs`
+launched it detached, so `wscript.exe` exited 0 a second after logon and Task
+Scheduler spent the entire outage reporting `Ready / LastTaskResult 0` — its
+`RestartOnFailure` was bound to a process that always succeeded immediately.
+Fixed in three layers: the exit code now survives `cmd` (`echo` was resetting
+`%ERRORLEVEL%`), `hidden.vbs` waits and **relaunches crashes itself** — because
+Task Scheduler's restart-on-failure was measured *not* to fire on a non-zero
+exit code, only on a failure to launch — and a new **"Peripheral Watchdog"**
+task probes `/api/health` every 5 minutes for the deaths the launcher cannot
+see. Every path verified by killing the real daemon; **"Glass checks out."**
+The 07:47:16 death itself is **still unexplained** — made survivable, not
+diagnosed.
+
 > **Starting a session? Read
-> [`docs/plans/session-handoff-2026-08-20.md`](docs/plans/session-handoff-2026-08-20.md)
+> [`docs/plans/session-handoff-2026-08-24.md`](docs/plans/session-handoff-2026-08-24.md)
 > first.** It has the ordered next actions, what is verified and by what
 > method, and the open questions that need Ricky.
 
@@ -280,6 +296,8 @@ is the contract.
 | Work calendar (Balcom) | **PRIMARY account — critical path.** Direct OAuth, untested. Sharing work→personal is confirmed blocked; see below. |
 | State cache | `%LOCALAPPDATA%\Peripheral\last-state.json` — last-good agenda, restored at boot. Holds real event titles, so **outside the repo**; this repo goes public. Override with `PERIPHERAL_STATE_PATH`. |
 | Daemon log | `%LOCALAPPDATA%\Peripheral\daemon.log` — written by the logon task, rotated at 5MB. `npm run startup:logs` |
+| Watchdog log | `%LOCALAPPDATA%\Peripheral\watchdog.log` — one line per 5-minute check, healthy ones included, rotated at 1MB. `npm run watchdog:logs`. **First thing to read after any morning the panel looked wrong.** |
+| Scheduled tasks | **Two**, both registered by `npm run startup:install`: `Peripheral` (logon+30s, sits in `Running` for as long as the daemon lives) and `Peripheral Watchdog` (every 5 min, plus logon+3m). |
 | Server port | `4780` (1280 wide, 480 tall), override `PERIPHERAL_PORT` |
 | Wallpaper source | `%APPDATA%\Microsoft\Windows\Themes\TranscodedWallpaper` |
 
@@ -396,6 +414,78 @@ interchangeably. Nothing else in the build depends on which one we get.
 - Type scale is tuned for 6.86" read from ~3 feet, not for a desktop monitor.
 
 ## Lessons Learned
+- **2026-08-24 — A supervisor bound to the wrong process is not a supervisor,
+  and it reports success the entire time it is failing.** The logon task
+  launched the daemon through `hidden.vbs` with `WScript.Shell.Run`'s
+  don't-wait flag, so `wscript.exe` exited 0 about a second after logon. Task
+  Scheduler watches *that* process. The task therefore read `Ready /
+  LastTaskResult 0` for the whole hour the daemon ran **and** for the half
+  hour it was dead, and its `RestartOnFailure 3x1min` was bound to a process
+  that always succeeded immediately — it could never fire, and never had. This
+  silently defeated the guarantee `daemon.js` documents at length, *"a daemon
+  that is dead must LOOK dead, so the task's restart-on-failure can fire."*
+  The daemon did look dead. Nothing was looking.
+  **Standing rule: a restart/monitor/health mechanism must be verified by
+  observing the supervisor's own state while the supervised thing is
+  running.** If the task does not sit in `Running` for as long as the daemon
+  lives, it is not watching the daemon. This is the same shape as the
+  2026-08-18 rule that *a timeout is evidence about the waiting party, not the
+  awaited one* — here, a task result is evidence about the process the task
+  launched, which is not necessarily the process doing the work.
+  **Corollary, measured the same day: Windows Task Scheduler's
+  `RestartOnFailure` responds to a task that fails to LAUNCH, not to an action
+  that returns non-zero.** Tested deliberately, with the watchdog disabled so
+  nothing could take the credit: daemon killed 08:33:14, task result correctly
+  `4294967295`, still `Ready` with nothing restarted two minutes later. Do not
+  design around that setting doing process supervision — it does not. The
+  relaunch loop lives in `hidden.vbs`, and the liveness check in
+  `scripts/watchdog.vbs`.
+- **2026-08-24 — Reporting a status value can destroy it.** `run-daemon.cmd`
+  ended with `echo [startup] ... daemon exited with code %ERRORLEVEL%`, which
+  is wrong in a way that reads as obviously correct: **`echo` succeeds, and
+  succeeding is what resets `%ERRORLEVEL%` to 0.** The line meant to report the
+  exit code was the line that erased it, so `cmd` returned 0 for a daemon that
+  had crashed, and every layer above it — `hidden.vbs`, the task, `startup:
+  status` — faithfully propagated that lie.
+  **Standing rule: capture a status value into a variable before doing anything
+  else with it, including logging it.** Any diagnostic that reads the thing it
+  is reporting on can clobber it, and `%ERRORLEVEL%` is the sharpest instance
+  because *every* command touches it. `exit /b %RC%` is also required — without
+  it a `.cmd` exits with the status of its last command, which is the echo.
+- **2026-08-24 — Do not choose a file's mtime as a liveness signal on
+  Windows.** The obvious watchdog design was "restart if `daemon.log` hasn't
+  been written in N seconds." **NTFS defers last-write-time updates for files
+  that are still open**, so a perfectly healthy daemon holding its log open can
+  present a stale timestamp — and the watchdog would have killed it on a
+  schedule. Measured on this machine the mtime happens to track the 30s
+  heartbeat, which is precisely the trap: it would have looked fine in testing.
+  The test run also produced the inverse hazard, unprompted — **the log read
+  `0s old` while the daemon was dead**, because `run-daemon.cmd`'s exit banner
+  had just been written to it. So the signal is unreliable in both directions.
+  **Standing rule: a signal that is usually right is not a safe basis for
+  something destructive.** The probe is `GET /api/health` instead, which is
+  answered by the daemon's main thread and therefore cannot be faked by a file
+  that some other process touched. mtime is still logged as context — useful to
+  read, never decided on.
+- **2026-08-24 — RECURRENCE of the 2026-08-18 "prove the check can return
+  something" rule, twice in one session, once with the correct check already
+  sitting in the repo.** Diagnosing the outage I checked for a live daemon with
+  `CommandLine -like '*peripheral*'`. The daemon's command line is `node
+  --env-file-if-exists=.env src\daemon.js` — **no such substring**, so that
+  check could not have returned a hit whether or not the daemon was running,
+  and I reported a confident absence from it. The conclusion happened to be
+  right on other evidence (a 29-minute gap in a log that writes every 30s), but
+  the check was worthless. **`scripts/startup.ps1` already contained the
+  correct filter — `*src\daemon.js*` — and I wrote a worse one instead of
+  reading it.** Then, later the same session, I ran `grep -P` to check a file
+  for non-ASCII, `grep` errored out with *"-P supports only unibyte and UTF-8
+  locales"*, and I read the `||` fallback branch as a clean pass.
+  **Standing rule, strengthened: a check that returns "nothing found" must be
+  proven capable of returning something, AND its exit status must be
+  distinguished from its result** — `cmd || echo clean` reports a *crashed*
+  check as a clean one. **And before writing an ad-hoc check for a thing the
+  project already inspects, grep the repo for how it does it.** The existing
+  answer is both correct and maintained; a fresh one is neither.
 - **2026-08-20 — A `diff` against a file holding real secrets prints those
   secrets, and a verification step doesn't get a pass on that just because
   it's "only checking a restore worked."** While testing `scripts/setup.js`'s
