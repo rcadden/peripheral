@@ -20,4 +20,15 @@ REM PLAYWRIGHT_BROWSERS_PATH. Node >= 22.9. Missing .env is not an error: the
 REM daemon still serves the pane and pushes frames, it just has no calendar.
 node --env-file-if-exists=.env src\daemon.js
 
-echo [startup] %DATE% %TIME% — daemon exited with code %ERRORLEVEL%
+REM Capture BEFORE the echo. `echo` succeeds, and succeeding is exactly what
+REM resets %ERRORLEVEL% to 0 -- so reporting the exit code destroys the exit
+REM code. cmd then returns 0 for a daemon that crashed, hidden.vbs propagates
+REM that 0, and the task's restart-on-failure never fires. The whole
+REM supervision chain is only as honest as this one variable.
+set "RC=%ERRORLEVEL%"
+
+echo [startup] %DATE% %TIME% — daemon exited with code %RC%
+
+REM `exit /b` and not a bare fall-through: without it cmd exits with the code
+REM of the last command it ran, which is the echo above.
+exit /b %RC%

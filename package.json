@@ -25,6 +25,9 @@
     "startup:uninstall": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/startup.ps1 -Action uninstall",
     "startup:status": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/startup.ps1 -Action status",
     "startup:logs": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/startup.ps1 -Action logs",
+    "watchdog:logs": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/startup.ps1 -Action watchdog-logs",
+    "_comment_watchdog_test": "Fault injection against the real daemon, same rule as idle-test and stall-test: it runs the actual end/sweep/run recovery path rather than simulating it. The panel WILL blink.",
+    "watchdog:test": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/startup.ps1 -Action watchdog-run",
     "send": "node --env-file-if-exists=.env src/transport/send.js",
     "idle-test": "node --env-file-if-exists=.env src/transport/idle-test.js",
     "stall-test": "node src/transport/stall-test.js"
