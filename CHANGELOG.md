@@ -1453,10 +1453,16 @@ dead cable can assert forever is how a watchdog becomes a crash loop.
   deliberate act before the decline, so it is recorded rather than dismissed.
   Confirm or kill by: whether the panel returns on a new cable with no software
   change at all.
-- **Boot-time application of a saved orientation has never run.** The daemon
+- ~~**Boot-time application of a saved orientation has never run.** The daemon
   restarted *before* `display.json` existed, so only the live-change path is
   proven. Confirm by: the next daemon start logging
-  `display: rotated 180 degrees (from saved)`.
+  `display: rotated 180 degrees (from saved)`.~~ **ANSWERED 2026-08-29**, at
+  session close, by the final restart from the logon task — the daemon logged
+  exactly that line. The saved > env > default chain resolves correctly at
+  startup, not only on a live file change. Recorded rather than removed: the
+  useful part is that the confirming command was written down *with* the
+  unknown, which is what made it a thirty-second check instead of a future
+  session's question.
 - **The `Save` button's own click path has never been exercised by a human.** The
   endpoint was driven with `curl`, the radio and status logic in a real browser.
   Confirm by: clicking it once at `/settings/palette/`.

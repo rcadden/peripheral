@@ -896,11 +896,12 @@ not exist.
 - [ ] **The Save button has never been clicked by a human.** The endpoint was
       exercised with `curl` and the radio/status logic in a real browser, but
       not the button's own click path end to end.
-- [ ] **Boot-time application of a saved orientation.** The daemon restarted
-      *before* `display.json` existed, so only the live-change path is proven;
-      resolving `source: saved` at startup has never actually run. **Cheap to
-      close: it happens on the next daemon start** — check the log for
-      `display: rotated 180 degrees (from saved)`.
+- [x] **Boot-time application of a saved orientation — CLOSED 2026-08-29**,
+      at session close, by the final daemon restart. The log line is
+      `[daemon] display: rotated 180 degrees (from saved)`, so the
+      saved > env > default chain resolves correctly at startup and not
+      only on a live file change. Listed as unverified earlier the same
+      session; kept here rather than deleted so the sequence is legible.
 - [ ] `watchDisplaySettings()`'s catch branch (fs.watch unavailable).
 
 ## Sprint 8 — Panel liveness in the health signal — **NOT STARTED, opened 2026-08-29**
