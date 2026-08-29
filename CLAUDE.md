@@ -142,8 +142,42 @@ see. Every path verified by killing the real daemon; **"Glass checks out."**
 The 07:47:16 death itself is **still unexplained** — made survivable, not
 diagnosed.
 
+**Sprint 7 — Display orientation — opened and closed 2026-08-28/29.** Ricky
+mounted the panel upside down and asked for the display to be rotated; it
+became a settings feature the same session on his follow-up. **Confirmed on
+the glass** — *"I checked the panel yesterday, the rotation looked good."*
+Rotation is a render-time flag on the pane URL (`?rotate=180`), never a
+stylesheet edit, so the frame pushed to the glass rotates while the page a
+human opens in a browser stays upright and readable. Settable at
+`/settings/palette/`, persisted to `display.json`, applied by a file watch
+**without a daemon restart**. A picker-saved value beats `PERIPHERAL_ROTATE`
+— a deliberate inversion of `palette.js`'s env-always-wins rule, reasoned in
+`src/display-settings.js`. 0 and 180 only: a quarter turn needs a 480×1280
+pane, not a transform.
+
+**THE PANEL IS DEAD, OR ITS CABLE IS — 2026-08-29, day 13.** Discovered by
+the session-close verification gate. Repeated `ok → STALLED → down` cycles
+across ~12h, then `The device is not connected`, and **Windows no longer
+enumerates the device at all** (all four `VID_0416&PID_5302` nodes present in
+the registry, `Present: False`). This is the flicker-then-death curve the 19%
+one-star reviews describe, arriving inside the predicted 1–8 week window.
+**Nothing in this repo can fix it — the next step is physical, in the
+documented order: cable, then port, then unit.** Ricky's standing position
+that it is not the cable (2026-08-18) has not been revisited; what changed is
+that a new cable is now a single test with two clean outcomes rather than an
+argument.
+
+**The decoupled transport did its job and told nobody.** The daemon stayed up
+the whole time, kept fetching, kept rendering, kept serving the browser
+fallback — exactly as designed. But `/api/health` answered `ok`, the watchdog
+logged 1,176 lines without one non-`ok` entry, and the logon task sat in
+`Running`. Every supervision layer reports the **daemon**; none reports the
+**panel**. That is Sprint 6's lesson recurring one layer out, and it is now
+**Sprint 8**, scoped deliberately to log-loudly-and-do-not-act: restarting
+fixes nothing when the USB device is gone.
+
 > **Starting a session? Read
-> [`docs/plans/session-handoff-2026-08-24.md`](docs/plans/session-handoff-2026-08-24.md)
+> [`docs/plans/session-handoff-2026-08-29.md`](docs/plans/session-handoff-2026-08-29.md)
 > first.** It has the ordered next actions, what is verified and by what
 > method, and the open questions that need Ricky.
 
@@ -215,6 +249,7 @@ reaching for `--force`.
 | Handshake | replies `PM=128 SUB=1` + serial — confirms a 1280×480 Trofeo Vision |
 | **Idle timeout** | **~3 s. Stop pushing and it reverts to its boot logo.** |
 | Mount | Magnetic back |
+| **Status 2026-08-29** | **NOT ENUMERATING — absent from Windows PnP (`Present: False`) after ~12h of flicker-then-death on day 13.** See Status above and the failure log in `CHANGELOG.md`. Try: cable, then port, then unit. |
 
 ### The panel forgets — push forever
 Measured 2026-08-17 with `npm run idle-test`: the firmware discards the pushed
@@ -294,6 +329,7 @@ is the contract.
 | Token store | `%LOCALAPPDATA%\Peripheral\tokens.json` — **outside the repo on purpose.** A refresh token has no business in a project directory. Override with `PERIPHERAL_TOKEN_PATH`. |
 | Personal calendar | `grcadden@gmail.com` — confirmed reachable. Also natively shared **into** the work calendar, which is how the primary gets it. |
 | Work calendar (Balcom) | **PRIMARY account — critical path.** Direct OAuth, untested. Sharing work→personal is confirmed blocked; see below. |
+| Display settings | `%LOCALAPPDATA%\Peripheral\display.json` — panel orientation saved by `/settings/palette/`. **Beats `PERIPHERAL_ROTATE`**, which is only the default. Override the path with `PERIPHERAL_DISPLAY_PATH`. |
 | State cache | `%LOCALAPPDATA%\Peripheral\last-state.json` — last-good agenda, restored at boot. Holds real event titles, so **outside the repo**; this repo goes public. Override with `PERIPHERAL_STATE_PATH`. |
 | Daemon log | `%LOCALAPPDATA%\Peripheral\daemon.log` — written by the logon task, rotated at 5MB. `npm run startup:logs` |
 | Watchdog log | `%LOCALAPPDATA%\Peripheral\watchdog.log` — one line per 5-minute check, healthy ones included, rotated at 1MB. `npm run watchdog:logs`. **First thing to read after any morning the panel looked wrong.** |
@@ -414,6 +450,64 @@ interchangeably. Nothing else in the build depends on which one we get.
 - Type scale is tuned for 6.86" read from ~3 feet, not for a desktop monitor.
 
 ## Lessons Learned
+- **2026-08-29 — RECURRENCE of the 2026-08-24 supervision rule, one layer
+  out: every health signal in this project reports the DAEMON, and the thing
+  Ricky cares about is the PANEL.** The panel was dark for roughly twelve
+  hours. Throughout, `/api/health` answered `{"ok":true,"hasState":true}`,
+  the watchdog wrote 1,176 lines without a single non-`ok` entry, and the
+  logon task sat in `Running` exactly as designed. Every one of those signals
+  was **correct** — the daemon really was alive, really was answering, really
+  was rendering. They were also all answering a question nobody asked. The
+  only place the truth appeared was `panel=down` in a 30-second heartbeat
+  line in a log file, which is to say: nowhere a human would see it.
+  Sprint 6's own standing rule called this shot and was applied too
+  narrowly — *"a restart/monitor/health mechanism must be verified by
+  observing the supervisor's own state while the supervised thing is
+  running."* That was done, for the daemon. Nobody asked what the watchdog
+  says while the **panel** is dead, because the watchdog was built during a
+  daemon outage and the daemon became the implied subject.
+  **Standing rule: a health check must be named for, and tested against, the
+  failure of the thing the user actually experiences — not the process that
+  happens to be convenient to poll.** When adding a supervisor, write down
+  what it does NOT cover in the same commit; that sentence is the roadmap
+  item for the next layer. **Corollary, and the reason Sprint 8 is scoped to
+  log-only: a monitor must not act on a signal that a permanent fault can
+  assert forever.** Restarting the daemon does nothing when the USB device is
+  physically gone, so "restart when the panel is down" would have produced an
+  endless restart loop on top of a dead panel — a second failure stacked on
+  the first, caused by the fix.
+- **2026-08-29 — A preview of a setting that cancels a physical condition
+  shows the one form nobody ever sees.** The display-orientation control was
+  first built with a live preview: select 180, watch the pane rotate in the
+  settings iframe. It felt obviously right and was wrong, because **rotation
+  exists to cancel an upside-down mount** — on the actual glass, a correctly
+  set 180 panel reads UPRIGHT. The preview faithfully showed the frame as
+  transmitted, which is precisely the form that never reaches anyone's eyes,
+  and it did so by turning the browser fallback upside down: the exact
+  outcome the URL-flag design was chosen to prevent. Two rules collided and
+  the newer one lost on contact with what it was for.
+  **Standing rule: before building a preview, ask what the user sees at the
+  far end of the pipeline, not what the system emits.** For settings that
+  compensate for a physical property — orientation, colour temperature,
+  brightness against ambient light — the emitted form and the perceived form
+  are different, and only the second one is worth showing. When they differ
+  and the real thing is available, say so and point at it: the control now
+  reads *"the only honest confirmation is the panel itself."*
+- **2026-08-29 — `Number('')` is `0`, so an empty value can arrive disguised
+  as a deliberate one.** `parseRotation()` accepted the string form on
+  purpose (env vars and form controls both deliver strings), and
+  `Number(''.trim())` is `0`, which is a *valid* rotation. An empty form
+  field or a blank JSON value would therefore have resolved silently to
+  "Normal" — not an error, not a fallback, but a confident wrong answer that
+  looks identical to someone choosing upright. Caught by a test written
+  before the code was trusted, not by reading it.
+  **Standing rule: when a coercion maps absence onto a legal value, reject
+  the absence explicitly before coercing.** The dangerous cases are the ones
+  where the coerced result is in range — `Number('')` → `0`, `parseInt('x
+  ')` → NaN is loud, `Number(null)` → `0` is silent, `[] == false` is worse.
+  This is the same family as the 2026-08-18 rule about proving a check can
+  return something: a value that cannot be distinguished from a real answer
+  is not a safe default.
 - **2026-08-24 — A supervisor bound to the wrong process is not a supervisor,
   and it reports success the entire time it is failing.** The logon task
   launched the daemon through `hidden.vbs` with `WScript.Shell.Run`'s

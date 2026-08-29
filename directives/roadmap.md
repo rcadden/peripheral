@@ -60,6 +60,24 @@ sprint gates they only made a sprint look stalled.
   strike against the unit. **Before adding anything to this curve, confirm the
   daemon was actually alive and pushing at the time** (`npm run
   startup:status`, and the heartbeat in `daemon.log`).
+  **2026-08-29 — the curve arrived at its end, and this one IS a panel
+  event by the test above.** The daemon was alive, pushing, and answering
+  `/api/health` throughout, so the software-supervision exclusion does not
+  apply. Sequence over ~12h: repeated `ok -> STALLED -> down -> ok` cycles
+  (1,142 `down` heartbeats against 15,750 `ok` in the whole log), then
+  `Cannot write to hid device: WriteFile: (0x0000048F) The device is not
+  connected`, a worker respawn, and 1,174 `not enumerating` messages.
+  **Windows no longer sees the device at all** — all four nodes under
+  `VID_0416&PID_5302` present in the registry with `Present: False`,
+  confirmed against a control query (318 present devices, other HID
+  devices `Status OK`, so the check was proven able to return something).
+  Day 13 of ownership, inside the 1-8 week flicker-then-death window from
+  the 19% one-star reviews. **The cable is still the first thing to
+  replace, per the existing order — cable, then port, then unit.** Ricky's
+  standing position that it is not the cable (2026-08-18) has not been
+  revisited and this does not override it; it is now cheap to settle,
+  because a new cable either brings the panel back or eliminates the
+  theory.
 - **Cadence on a genuinely busy machine.** `npm run stall-test` proves the main
   thread survives a blocked transport; it does not prove the transport keeps 1
   fps while a Teams call and a build are running. Watch `worstPush` and the
@@ -822,6 +840,102 @@ registration have no meaningful test surface.
       looked like — means a worst-case ~5.5 minute dark panel. Raised with
       Ricky at session close; he did not ask for it to change, so it stays.
       Revisit if a real unattended outage lasts long enough to annoy him.
+
+## Sprint 7 — Display orientation — **COMPLETE 2026-08-29**
+
+Unplanned and small: Ricky mounted the panel upside down and asked for the
+display to be rotated. It started as a one-line CSS question and turned into
+a settings feature the same session, on his follow-up.
+
+- [x] **Rotate the pushed frame 180 degrees — DONE 2026-08-28.**
+      **Seen on the glass and confirmed by Ricky** ("the rotation looked
+      good", 2026-08-29, reporting on the previous day). Implemented as a
+      render-time flag on the pane URL (`?rotate=180`), read by an inline
+      script in the pane's `<head>` and applied by a single
+      `html[data-rotate="180"] .pane { transform: rotate(180deg) }` rule.
+      **Deliberately not a stylesheet edit**: the one structural decision
+      (`CLAUDE.md`) is that the daemon screenshots the same page a human
+      opens in a browser, and rotating the stylesheet would turn the
+      browser fallback upside down too. 180 degrees is an exact pixel
+      mapping, so nothing is resampled and type quality on the glass is
+      identical to upright.
+- [x] **Expose it in the settings UI — DONE 2026-08-29.** A `Display
+      orientation` section at `/settings/palette/`, persisting to
+      `%LOCALAPPDATA%\Peripheral\display.json` via `DisplaySettingsStore`
+      — the same versioned, atomic temp-then-rename shape as the palette
+      overrides and the weather location. `daemon.js` watches the file and
+      calls `renderer.goto()` on the rebuilt URL, so a change lands within
+      moments **without a daemon restart** — which also avoids bouncing the
+      HID device every time someone flips a radio button.
+- [x] **Settle the precedence question — DONE 2026-08-29.** A picker-saved
+      value **beats** `PERIPHERAL_ROTATE`, which deliberately inverts
+      `palette.js`'s rule that an env var always wins. Reasoning in
+      `src/display-settings.js` and in Lessons Learned; pinned by tests so
+      it cannot quietly flip back. `PERIPHERAL_ROTATE` is now the default
+      for an unattended install, and the UI says out loud when it is
+      overriding one.
+- [x] **Decide against a live preview — DONE 2026-08-29.** The first cut
+      rotated the colour picker's iframe. Cut for two reasons: it
+      contradicted the reason rotation is a URL flag at all, and it
+      previewed the wrong thing — a correctly-set 180 panel looks
+      **upright** on the glass, so the rotated frame is the one form nobody
+      ever sees. The section now says plainly that the panel is the only
+      honest confirmation.
+
+Only 0 and 180 are accepted, validated at three layers (parse, store, HTTP
+400). **A quarter turn is not a missing feature to add later:** the glass is
+1280x480, so 90/270 need a 480x1280 pane — different layout, different type
+scale — not a transform. Offering the option would promise a layout that does
+not exist.
+
+`npm test` 128/128, 18 new. One of them caught a defect before it shipped:
+`Number('')` is `0`, so an empty value would have silently resolved to
+"Normal" — a missing answer posing as a deliberate one.
+
+**Written but NOT verified, carried forward honestly:**
+- [ ] **The Save button has never been clicked by a human.** The endpoint was
+      exercised with `curl` and the radio/status logic in a real browser, but
+      not the button's own click path end to end.
+- [ ] **Boot-time application of a saved orientation.** The daemon restarted
+      *before* `display.json` existed, so only the live-change path is proven;
+      resolving `source: saved` at startup has never actually run. **Cheap to
+      close: it happens on the next daemon start** — check the log for
+      `display: rotated 180 degrees (from saved)`.
+- [ ] `watchDisplaySettings()`'s catch branch (fs.watch unavailable).
+
+## Sprint 8 — Panel liveness in the health signal — **NOT STARTED, opened 2026-08-29**
+
+Opened by the same failure that killed the panel, and worth building whether
+or not the hardware comes back. **The panel was dark for hours while every
+supervision layer reported healthy.** `/api/health` answered
+`{"ok":true,"hasState":true}` with the device physically absent from
+Windows, and `watchdog.log` recorded 1,176 lines with no entry that was not
+`ok`. The watchdog probes *daemon* liveness; nothing probes *panel*
+liveness.
+
+This is the Sprint 6 lesson recurring one layer out — a supervisor bound to
+the wrong thing, reporting success for the entire duration of the failure —
+and Sprint 6's own standing rule predicted it: *a restart/monitor/health
+mechanism must be verified by observing the supervisor's own state while the
+supervised thing is running.* Nobody checked what the watchdog says while the
+**panel** is dead, only while the daemon is.
+
+- [ ] **Put the panel's real state in `/api/health`.** `PanelProxy` already
+      derives `ok` / `STALLED <n>s` / `down` and the heartbeat prints it; the
+      health endpoint simply does not carry it. Likely the whole build.
+- [ ] **Make the watchdog report it.** A dark panel is not necessarily a
+      reason to restart the daemon — restarting fixes nothing when the USB
+      device is gone — so the first version should **log loudly, not act.**
+      Deciding to restart on a signal that a dead cable can assert forever is
+      how a watchdog becomes a crash loop.
+- [ ] **Decide what "the panel is dead" should look like to a human who is
+      not reading logs.** Open question for Ricky, not a build task. An
+      ambient display that has failed is indistinguishable from one nobody
+      looked at.
+
+**Blocked on hardware for verification, not for building.** With no panel
+attached, `down` is the only state reachable — which is enough to build
+against and not enough to prove the `ok` path still reports correctly.
 
 ## Future Explorations
 - **Tomorrow's first event when today is done — moved here 2026-08-20** from

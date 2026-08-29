@@ -1333,6 +1333,134 @@ The launcher's relaunch loop covers a daemon that crashes. It cannot cover what 
 - **Whether 5 minutes is the right watchdog interval.** A death the launcher cannot catch means a worst-case ~5.5 minute dark panel. Raised with Ricky at close; he did not ask for it to change, so it stays. Tunable in `startup.ps1`.
 - **The `MAX_FAST_FAILS` give-up path and `Probe()`'s fail-safe branch are written and unexecuted.** One relaunch was tested, not the cap of five; the probe never failed to construct. Both are guarded by conditions that cannot be forced without editing the constants.
 
+### Added — display rotation, then a settings control for it (2026-08-28/29)
+
+Ricky mounted the panel upside down and asked for the display to be rotated.
+**Seen on the glass and confirmed** — *"I checked the panel yesterday, the
+rotation looked good"* (2026-08-29, reporting on 08-28). That confirmation
+matters more than usual here, because the hardware died before it could be
+looked at again; see the failure log at the bottom of this file.
+
+**Rotation is a render-time flag on the pane URL, not a stylesheet edit.** The
+daemon opens `?rotate=180`; an inline script in the pane's `<head>` turns that
+into `data-rotate="180"` on `<html>`, and one rule —
+`html[data-rotate="180"] .pane { transform: rotate(180deg) }` — does the work.
+The reasoning is the project's one structural decision: the daemon screenshots
+the same page a human opens in a browser, so rotating the stylesheet would have
+turned the browser fallback upside down too. A query flag rotates only the
+frame going to the glass, from identical source. The script is inline and in
+`<head>` on purpose — it must run before first paint, or a reload can be
+screenshotted upright.
+
+Applied to `.pane` rather than `html`/`body` because `.pane` is exactly
+`--pane-w` x `--pane-h`, so a 180-degree turn about its own centre lands back
+on the same box: no layout is touched, and **180 is an exact pixel mapping**, so
+nothing is resampled and type quality on the glass is identical to upright.
+Measured in the live page rather than assumed: computed transform
+`matrix(-1, 0, 0, -1, 0, 0)`, `.pane` still at exactly `0,0,1280,480`, the
+header moved from the top to y 402-450 and the footer to y 30-59, and
+`scrollWidth`/`scrollHeight` unchanged at 1280x480 — no overflow introduced.
+
+**Only 0 and 180 are accepted, validated at three layers** — `parseRotation()`,
+`DisplaySettingsStore.save()`, and the HTTP handler (400). A quarter turn is not
+a missing feature to add later: the glass is 1280x480, so 90/270 need a 480x1280
+pane — different layout, different type scale, different everything — not a
+transform on this one. Offering the option would promise a layout that does not
+exist.
+
+**Then it moved into the settings UI**, on Ricky's follow-up the same session. A
+`Display orientation` section at `/settings/palette/`, persisting to
+`%LOCALAPPDATA%\Peripheral\display.json` through `DisplaySettingsStore` — the
+same versioned, atomic temp-then-rename shape as `PaletteOverridesStore` and
+`WeatherLocationStore`, stored outside the repo for the same reason. Named
+`display-settings` for the category rather than for rotation, so a second
+display-level setting does not need a second file.
+
+**It takes effect without a daemon restart.** `daemon.js` watches `display.json`
+(same debounced file-watch pattern as the weather location — deliberately a
+second watcher on the same directory rather than one shared handler coupling two
+unrelated settings), rebuilds the pane URL, and calls the existing
+`renderer.goto()`. A full restart would also bounce the HID device, which is not
+something to do because someone flipped a radio button. Rotation had been a
+boot-only constant on the reasoning that it describes how the hardware is bolted
+down and cannot change while the daemon runs — true of the panel, false of the
+setting, once a human could change it mid-run.
+
+**A picker-saved value BEATS `PERIPHERAL_ROTATE`, which deliberately inverts
+`palette.js`'s rule that an env var always wins.** The palette vars are per-run
+CLI experiments driven through `npm run palette`, where "the flag I just typed
+wins" is the entire point and the CLI prints what it resolved. This is a toggle
+in a web UI: if a stale line in `.env` could silently outrank it, flipping the
+control would do nothing, report success, and leave the panel upside down — a UI
+whose value is quietly ignored. `PERIPHERAL_ROTATE` is now the *default*, which
+is the only way to orient a machine being provisioned before anyone opens a
+browser, and `resolveRotation()` reports which source won so the UI can say so
+out loud. Pinned by tests so it cannot quietly flip back.
+
+**The orientation control deliberately has NO live preview**, and the first cut
+did. It rotated the colour picker's iframe, which was wrong twice: it
+contradicted the reason rotation is a URL flag at all (the browser view is
+supposed to stay upright and readable), and it left the colour picker below
+judging contrast on upside-down type. More fundamentally it previewed the wrong
+thing — **rotation cancels a physical mount, so a correctly-set 180 panel looks
+UPRIGHT on the glass**, and the rotated frame is the one form nobody ever sees.
+The section now states there is no preview and points at the panel.
+
+`npm test` 128/128, 18 new. **One of them caught a defect before it shipped:**
+`Number('')` is `0`, so an empty string would have parsed as a valid `0`, and an
+empty form field or blank JSON value would have silently meant "Normal" — a
+missing answer posing as a deliberate one.
+
+Verified against the running daemon rather than only in tests: a saved `0` beat
+`PERIPHERAL_ROTATE=180` live (`display: rotation changed to 0 degrees (from
+saved) — reloading pane`) and back again; `90` was refused with a 400 that left
+the saved value untouched; and the settings page was driven in a real browser
+with no page or console errors — selecting a value reported `not saved yet` and
+wrote nothing, with the server still reporting the previous value.
+
+### Discovered — the panel is dark and every supervision layer says healthy (2026-08-29)
+
+Found while running the session-close verification gate, not by looking for it.
+The daemon's heartbeat read `panel=down`, `pushed=0`, `respawns=1`.
+
+**Nothing in the supervision chain noticed, because nothing in it looks at the
+panel.** `/api/health` answered `{"ok":true,"hasState":true}` with the device
+physically absent from Windows. `watchdog.log` held 1,176 lines and **not one
+entry that was not `ok`** — the only non-`ok` lines in the whole file are from a
+forced restart the previous day. The watchdog probes *daemon* liveness; the
+daemon was perfectly alive.
+
+**This is the Sprint 6 lesson recurring one layer out**, and Sprint 6's own
+standing rule predicted it: *a restart/monitor/health mechanism must be verified
+by observing the supervisor's own state while the supervised thing is running.*
+That was done for the daemon. Nobody ever checked what the watchdog says while
+the **panel** is dead. Opened as Sprint 8 in the roadmap — with the deliberate
+constraint that the first version **logs loudly and does not act**, because
+restarting the daemon fixes nothing when the USB device is gone, and a signal a
+dead cable can assert forever is how a watchdog becomes a crash loop.
+
+### Known unknowns (2026-08-29)
+
+- **Whether the panel is dead or the cable is.** Cannot be settled from here —
+  it is below the software layer. The order in the daemon's own message stands:
+  cable, then port, then unit. Ricky's position that it is not the cable
+  (2026-08-18) has not been revisited and this does not override it; a new cable
+  now either brings the panel back or eliminates the theory outright, which is
+  cheaper than continuing to argue it.
+- **Whether the rotation work contributed.** Almost certainly not — the panel was
+  healthy at `pushed=245 failed=0` after the 2026-08-28 12:10 restart, and Ricky
+  confirmed the rotation on the glass afterwards — but that restart is the last
+  deliberate act before the decline, so it is recorded rather than dismissed.
+  Confirm or kill by: whether the panel returns on a new cable with no software
+  change at all.
+- **Boot-time application of a saved orientation has never run.** The daemon
+  restarted *before* `display.json` existed, so only the live-change path is
+  proven. Confirm by: the next daemon start logging
+  `display: rotated 180 degrees (from saved)`.
+- **The `Save` button's own click path has never been exercised by a human.** The
+  endpoint was driven with `curl`, the radio and status logic in a real browser.
+  Confirm by: clicking it once at `/settings/palette/`.
+
 ## Decisions worth not relitigating
 
 Recorded here so they survive a cold start. Full reasoning lives in `CLAUDE.md`.
@@ -1367,6 +1495,7 @@ matter for judging the failure curve.
 | 2026-08-18 ~10:00–11:07 | day 2, later | **5+ more stalls** during this session's pane-editing work, worker thread reporting `TRANSPORT STALLED`, individual pushes up to **6603ms** (over 2× the previous worst) and repeatedly past the ~3s forget window. `slowRun=1` / `slowRun=2` in the heartbeat. | Self-recovered each time (`panel transport recovered`) — no replug needed. |
 | ~~2026-08-19 ~08:41~~ | ~~day 3~~ | **NOT A REAL EVENT — corrected same day.** Panel reported `not enumerating` after a forceful daemon restart; the panel was simply not physically connected this session. No hardware or shutdown-path fault. | N/A — Ricky confirmed via browser preview, panel wasn't plugged in. |
 | ~~2026-08-24 07:47–08:18~~ | ~~day 8~~ | **NOT A PANEL EVENT — logged here only so it is not counted on this curve later.** 31 minutes on the vendor logo, but the panel behaved exactly as designed: the daemon process was gone, and the firmware forgets ~3s after the last frame. A software supervision bug, not hardware. See *"Fixed — nothing was supervising the daemon"* above. | Manual `schtasks /run`, then the supervision fixes shipped the same session. |
+| 2026-08-29, through ~12:04 | day 13 | **A REAL PANEL EVENT — it passes the 2026-08-24 exclusion test: the daemon was alive, pushing, and answering `/api/health` throughout.** The failure curve the reviews describe, arriving on schedule. Repeated `ok -> STALLED -> down -> ok` cycles across ~12h (**1,142 `down` heartbeats against 15,750 `ok`** in the whole log), then `Cannot write to hid device: WriteFile: (0x0000048F) The device is not connected`, one worker respawn, and **1,174 `not enumerating` messages**. **Windows no longer sees the device at all** — all four nodes under `VID_0416&PID_5302` present in the registry with `Present: False`, verified against a control query (318 present devices, other HID devices `Status OK`) so the absence is real and not a bad check. Continuously down ~2h14m at time of writing. | **NOT CLEARED.** Below the software layer — nothing in this repo can fix it. Next step is physical, in the documented order: **cable, then port, then unit.** |
 
 Two events in two days was recorded as early on the curve, both consistent
 with the cable — the failure point the reviews name most often. **Arguably a
@@ -1377,3 +1506,29 @@ not a conclusion — do not swap the cable or otherwise act on the cable theory
 without his sign-off. The decoupled-transport decision is still doing its
 job regardless of cause: every stall this session self-recovered without a
 replug.
+
+**Updated 2026-08-29 — the disputed question is now cheap to settle.** The text
+above records an open disagreement: three events by day 2 looked like the cable,
+and Ricky said twice that he does not think it is. That disagreement was left
+open rather than resolved, correctly, because nothing could settle it.
+
+The day-13 event changes what it costs to find out. The panel is now absent from
+the device tree entirely, so **a new USB-C cable is a single test with two clean
+outcomes**: the panel comes back, and the cable theory was right all along; or it
+does not, and the theory is eliminated and the unit is the answer. Neither
+outcome requires anyone to have been right in advance.
+
+This is still not a licence to act on the cable theory unilaterally — the
+standing rule stands, and it is Ricky's call. What has changed is that the
+question stopped being an argument and became an errand.
+
+**The decoupled transport is vindicated, for whatever that is worth today.** A
+dead panel cost a screen and nothing else: the daemon stayed up for the entire
+~12 hours, kept fetching calendar and weather, kept rendering, kept serving the
+browser fallback at `http://127.0.0.1:4780/panes/agenda/`, and self-recovered
+across every intermittent return. That was the whole point of the design, and it
+held on the day it was actually needed.
+
+**What it did not do is tell anyone.** See *"Discovered — the panel is dark and
+every supervision layer says healthy"* above, and Sprint 8.
+
