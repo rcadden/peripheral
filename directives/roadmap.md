@@ -60,8 +60,13 @@ sprint gates they only made a sprint look stalled.
   strike against the unit. **Before adding anything to this curve, confirm the
   daemon was actually alive and pushing at the time** (`npm run
   startup:status`, and the heartbeat in `daemon.log`).
-  **2026-08-29 — the curve arrived at its end, and this one IS a panel
-  event by the test above.** The daemon was alive, pushing, and answering
+  ~~**2026-08-29 — the curve arrived at its end, and this one IS a panel
+  event by the test above.**~~ **WRONG, corrected the same day: Ricky had
+  unplugged the panel to take his laptop downstairs. NOT a panel event,
+  does NOT count on this curve.** The exclusion test in the entry above
+  was applied and passed — it rules out the daemon being dead, and says
+  nothing about whether the hardware is plugged in. **Add that check
+  before this one: is it physically connected?** Superseded text kept: The daemon was alive, pushing, and answering
   `/api/health` throughout, so the software-supervision exclusion does not
   apply. Sequence over ~12h: repeated `ok -> STALLED -> down -> ok` cycles
   (1,142 `down` heartbeats against 15,750 `ok` in the whole log), then
@@ -907,7 +912,13 @@ not exist.
 ## Sprint 8 — Panel liveness in the health signal — **NOT STARTED, opened 2026-08-29**
 
 Opened by the same failure that killed the panel, and worth building whether
-or not the hardware comes back. **The panel was dark for hours while every
+or not the hardware comes back. **Corrected 2026-08-29: the panel was unplugged, not dead — which makes
+this sprint MORE worth building, not less.** The original framing was a
+missed hardware death. The real one is better: **an ordinary Saturday is
+indistinguishable, in every signal this project emits, from catastrophic
+failure**, and the ordinary version happens most days.
+
+**The panel was dark for hours while every
 supervision layer reported healthy.** `/api/health` answered
 `{"ok":true,"hasState":true}` with the device physically absent from
 Windows, and `watchdog.log` recorded 1,176 lines with no entry that was not

@@ -155,26 +155,24 @@ human opens in a browser stays upright and readable. Settable at
 `src/display-settings.js`. 0 and 180 only: a quarter turn needs a 480×1280
 pane, not a transform.
 
-**THE PANEL IS DEAD, OR ITS CABLE IS — 2026-08-29, day 13.** Discovered by
-the session-close verification gate. Repeated `ok → STALLED → down` cycles
-across ~12h, then `The device is not connected`, and **Windows no longer
-enumerates the device at all** (all four `VID_0416&PID_5302` nodes present in
-the registry, `Present: False`). This is the flicker-then-death curve the 19%
-one-star reviews describe, arriving inside the predicted 1–8 week window.
-**Nothing in this repo can fix it — the next step is physical, in the
-documented order: cable, then port, then unit.** Ricky's standing position
-that it is not the cable (2026-08-18) has not been revisited; what changed is
-that a new cable is now a single test with two clean outcomes rather than an
-argument.
+~~**THE PANEL IS DEAD, OR ITS CABLE IS — 2026-08-29, day 13.**~~
+**CORRECTED SAME DAY — NOT A HARDWARE EVENT.** Ricky had unplugged the panel:
+*"I took my laptop downstairs and the panel is attached to my external
+monitor."* The observations were real (absent from Windows PnP, `The device is
+not connected`, ~12h of flicker in the log); the conclusion drawn from them was
+not. **This does not count on the hardware failure curve.** It is the second
+time this exact mistake has been made — see the struck-through 2026-08-19 row
+in `CHANGELOG.md` — and the rule that now exists for it is in Lessons Learned.
 
-**The decoupled transport did its job and told nobody.** The daemon stayed up
-the whole time, kept fetching, kept rendering, kept serving the browser
-fallback — exactly as designed. But `/api/health` answered `ok`, the watchdog
+**What survives is Sprint 8, better grounded than before.** During the
+disconnect, `/api/health` answered `{"ok":true,"hasState":true}`, the watchdog
 logged 1,176 lines without one non-`ok` entry, and the logon task sat in
-`Running`. Every supervision layer reports the **daemon**; none reports the
-**panel**. That is Sprint 6's lesson recurring one layer out, and it is now
-**Sprint 8**, scoped deliberately to log-loudly-and-do-not-act: restarting
-fixes nothing when the USB device is gone.
+`Running`. All correct, all answering a question nobody asked. **An ordinary
+Saturday — picking up the laptop and walking downstairs — is indistinguishable,
+in every signal this project emits, from catastrophic hardware failure.** One of
+those two things happens most days. Sprint 8 stays scoped to **log loudly, do
+not act**: a watchdog restarting the daemon on `panel=down` would have spent the
+afternoon restarting a healthy daemon because its owner went downstairs.
 
 > **Starting a session? Read
 > [`docs/plans/session-handoff-2026-08-29.md`](docs/plans/session-handoff-2026-08-29.md)
@@ -249,7 +247,7 @@ reaching for `--force`.
 | Handshake | replies `PM=128 SUB=1` + serial — confirms a 1280×480 Trofeo Vision |
 | **Idle timeout** | **~3 s. Stop pushing and it reverts to its boot logo.** |
 | Mount | Magnetic back |
-| **Status 2026-08-29** | **NOT ENUMERATING — absent from Windows PnP (`Present: False`) after ~12h of flicker-then-death on day 13.** See Status above and the failure log in `CHANGELOG.md`. Try: cable, then port, then unit. |
+| **Note 2026-08-29** | **The panel lives on the external monitor at the desk, and the laptop moves.** An unplugged panel presents in the logs exactly like a dead one — `not enumerating`, absent from Windows PnP. **Confirm it is physically connected before concluding anything about the hardware.** Corrected twice now (2026-08-19, 2026-08-29). |
 
 ### The panel forgets — push forever
 Measured 2026-08-17 with `npm run idle-test`: the firmware discards the pushed
@@ -450,6 +448,41 @@ interchangeably. Nothing else in the build depends on which one we get.
 - Type scale is tuned for 6.86" read from ~3 feet, not for a desktop monitor.
 
 ## Lessons Learned
+- **2026-08-29 — SECOND OCCURRENCE: an unplugged panel is indistinguishable
+  from a dead one, and the exclusion test that exists for this does not cover
+  it.** The session-close gate found `panel=down`, the device absent from
+  Windows PnP, `The device is not connected`, and ~12h of flicker in the log,
+  and concluded the hardware had died on the reviews' predicted curve. Ricky:
+  *"I just unplugged the panel cause I took my laptop downstairs and the panel
+  is attached to my external monitor."* Every observation was accurate. The
+  conclusion was invented.
+  What makes this worth writing down rather than shrugging off: **the project
+  already had this exact correction on file**, struck through in
+  `CHANGELOG.md` under 2026-08-19 — *"the panel was simply not physically
+  connected this session"* — and the 2026-08-24 entry had already added a
+  guard for the failure log: *before adding anything to this curve, confirm
+  the daemon was actually alive and pushing at the time.* **That check was
+  run, and it passed.** It rules out one wrong cause (a dead daemon) and says
+  nothing about the other (an absent cable). A guard that covers the last
+  mistake is not a guard against the next one.
+  **Standing rule: `not enumerating` is a statement about the USB bus, never
+  about the health of a device. Before attributing it to hardware, establish
+  the panel is plugged in — and when that cannot be established from a
+  session, ASK, because it is one question with a definitive answer.** More
+  generally: a diagnosis that concludes "the hardware is dead" should be the
+  last resort after the boring causes, and the most boring cause of a missing
+  USB device is that nobody plugged it in. Cost of the error is not the wrong
+  guess, it is what gets built on top — a failure-log entry, a hardware-spend
+  question, and a paragraph of alarm in three documents.
+  **What survives, and is better for it: the supervision gap is real.** During
+  a routine unplug, `/api/health` answered `ok`, the watchdog logged 1,176
+  lines with no non-`ok` entry, and the logon task sat in `Running`. The right
+  framing is not "a dead panel went unnoticed" but **"an ordinary Saturday is
+  indistinguishable from catastrophic failure in every signal this project
+  emits"** — and the ordinary version happens most days. That also settles
+  Sprint 8's scope: **log, never act.** A watchdog restarting on `panel=down`
+  would have restarted a healthy daemon all afternoon because its owner
+  carried a laptop downstairs.
 - **2026-08-29 — RECURRENCE of the 2026-08-24 supervision rule, one layer
   out: every health signal in this project reports the DAEMON, and the thing
   Ricky cares about is the PANEL.** The panel was dark for roughly twelve

@@ -1439,15 +1439,59 @@ constraint that the first version **logs loudly and does not act**, because
 restarting the daemon fixes nothing when the USB device is gone, and a signal a
 dead cable can assert forever is how a watchdog becomes a crash loop.
 
+### CORRECTION — the panel was unplugged, not dead (2026-08-29, same day)
+
+Ricky, immediately on reading the session-close report: *"I just unplugged the
+panel cause I took my laptop downstairs and the panel is attached to my
+external monitor."*
+
+**The two sections above — "Discovered — the panel is dark and every
+supervision layer says healthy" and the day-13 failure-log row — reached the
+wrong conclusion from correct observations.** Everything measured was real: the
+device genuinely was absent from Windows PnP, the daemon genuinely did log
+`The device is not connected`, and the flicker pattern in the log is genuinely
+there. What was wrong was inferring hardware death from it. The panel was
+disconnected because the laptop moves, and the panel lives on the external
+monitor at the desk.
+
+The superseded text stays per the no-tidying rule. **The day-13 event does not
+count on the hardware failure curve** and the row is struck through.
+
+**This is a RECURRENCE.** The identical correction is already in this file,
+dated 2026-08-19: *"Panel reported `not enumerating` after a forceful daemon
+restart; the panel was simply not physically connected this session."* That
+row was struck through for exactly this reason four days earlier, and the
+2026-08-24 entry then added a standing rule — *before adding anything to this
+curve, confirm the daemon was actually alive and pushing at the time.* That
+check was performed and passed. It was the wrong check: it rules out the
+daemon, and says nothing about whether anything is plugged in.
+
+**What survives, and is now better grounded than it was:** Sprint 8. The
+original framing was that a dead panel went unnoticed for twelve hours. The
+real framing is stronger and cheaper to justify — **an ordinary Saturday
+(picking up a laptop and walking downstairs) is indistinguishable, in every
+signal this project emits, from catastrophic hardware failure.** `/api/health`
+says `ok` either way. The watchdog says `ok` either way. Nothing tells a human
+which one is happening, and one of those two things happens most days.
+
+That also retroactively validates scoping Sprint 8 to **log, do not act**. A
+watchdog that restarted the daemon on `panel=down` would have spent the whole
+afternoon restarting a perfectly healthy daemon because its owner went
+downstairs.
+
+**Not concluded, deliberately:** whether any of the earlier stall/flicker
+events on this hardware were also plug-related. That is a live question now,
+not a settled one, and re-reading old events through a new theory is how the
+last wrong conclusion got built. Left open.
+
 ### Known unknowns (2026-08-29)
 
-- **Whether the panel is dead or the cable is.** Cannot be settled from here —
-  it is below the software layer. The order in the daemon's own message stands:
-  cable, then port, then unit. Ricky's position that it is not the cable
-  (2026-08-18) has not been revisited and this does not override it; a new cable
-  now either brings the panel back or eliminates the theory outright, which is
-  cheaper than continuing to argue it.
-- **Whether the rotation work contributed.** Almost certainly not — the panel was
+- ~~**Whether the panel is dead or the cable is.**~~ **VOID — same day.** The
+  panel was unplugged; see the correction above. Neither dead nor a cable
+  fault. The 2026-08-18 cable disagreement is untouched by this and remains
+  exactly as open as it was.
+- ~~**Whether the rotation work contributed.**~~ **VOID — same day**, along
+  with the premise. Kept for the record: Almost certainly not — the panel was
   healthy at `pushed=245 failed=0` after the 2026-08-28 12:10 restart, and Ricky
   confirmed the rotation on the glass afterwards — but that restart is the last
   deliberate act before the decline, so it is recorded rather than dismissed.
@@ -1501,7 +1545,7 @@ matter for judging the failure curve.
 | 2026-08-18 ~10:00–11:07 | day 2, later | **5+ more stalls** during this session's pane-editing work, worker thread reporting `TRANSPORT STALLED`, individual pushes up to **6603ms** (over 2× the previous worst) and repeatedly past the ~3s forget window. `slowRun=1` / `slowRun=2` in the heartbeat. | Self-recovered each time (`panel transport recovered`) — no replug needed. |
 | ~~2026-08-19 ~08:41~~ | ~~day 3~~ | **NOT A REAL EVENT — corrected same day.** Panel reported `not enumerating` after a forceful daemon restart; the panel was simply not physically connected this session. No hardware or shutdown-path fault. | N/A — Ricky confirmed via browser preview, panel wasn't plugged in. |
 | ~~2026-08-24 07:47–08:18~~ | ~~day 8~~ | **NOT A PANEL EVENT — logged here only so it is not counted on this curve later.** 31 minutes on the vendor logo, but the panel behaved exactly as designed: the daemon process was gone, and the firmware forgets ~3s after the last frame. A software supervision bug, not hardware. See *"Fixed — nothing was supervising the daemon"* above. | Manual `schtasks /run`, then the supervision fixes shipped the same session. |
-| 2026-08-29, through ~12:04 | day 13 | **A REAL PANEL EVENT — it passes the 2026-08-24 exclusion test: the daemon was alive, pushing, and answering `/api/health` throughout.** The failure curve the reviews describe, arriving on schedule. Repeated `ok -> STALLED -> down -> ok` cycles across ~12h (**1,142 `down` heartbeats against 15,750 `ok`** in the whole log), then `Cannot write to hid device: WriteFile: (0x0000048F) The device is not connected`, one worker respawn, and **1,174 `not enumerating` messages**. **Windows no longer sees the device at all** — all four nodes under `VID_0416&PID_5302` present in the registry with `Present: False`, verified against a control query (318 present devices, other HID devices `Status OK`) so the absence is real and not a bad check. Continuously down ~2h14m at time of writing. | **NOT CLEARED.** Below the software layer — nothing in this repo can fix it. Next step is physical, in the documented order: **cable, then port, then unit.** |
+| ~~2026-08-29, through ~12:04~~ | ~~day 13~~ | **NOT A REAL EVENT — corrected same day by Ricky: "I just unplugged the panel cause I took my laptop downstairs and the panel is attached to my external monitor."** The device was absent from Windows PnP because it was physically disconnected. No hardware fault, and **this must not be counted on the failure curve.** Original text kept below per the no-tidying rule: *repeated `ok -> STALLED -> down -> ok` cycles across ~12h (1,142 `down` heartbeats against 15,750 `ok`), then `The device is not connected`, one worker respawn, 1,174 `not enumerating` messages, all four `VID_0416&PID_5302` nodes `Present: False`.* Every one of those observations was accurate. The conclusion drawn from them was not — the daemon behaved correctly throughout for a panel that had been unplugged, which is indistinguishable in the logs from a panel that has died. | N/A — nothing to clear. Plug it back in. |
 
 Two events in two days was recorded as early on the curve, both consistent
 with the cable — the failure point the reviews name most often. **Arguably a

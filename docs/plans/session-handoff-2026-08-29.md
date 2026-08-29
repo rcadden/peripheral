@@ -15,37 +15,38 @@ session that produced it.
 
 ## Read this first
 
-**The panel is not working. It is not a software problem, and nothing in this
-repo can fix it.**
+**CORRECTION, appended 2026-08-29 shortly after this file was written. The
+section below is WRONG and is kept struck-through rather than deleted.** The
+panel was never dead — Ricky had unplugged it: *"I took my laptop downstairs
+and the panel is attached to my external monitor."* There is no hardware
+fault, nothing to diagnose, and nothing to buy. **Plug it back in.**
 
-On 2026-08-29 — **day 13** of ownership — the Thermalright Trofeo Vision
-stopped enumerating. Windows does not see the device at all: all four nodes
-under `VID_0416&PID_5302` are present in the registry with `Present: False`.
-That absence was verified against a control query (318 present devices, other
-HID devices reporting `Status OK`), so it is a real absence and not a bad
-check.
+The rule that comes out of it, which is the only part worth carrying forward:
+**an unplugged panel is indistinguishable from a dead one in every signal this
+project emits** — `not enumerating`, absent from Windows PnP, `The device is
+not connected`. Before concluding anything about this hardware, confirm it is
+physically connected. This is the second time the mistake has been made; the
+first is the struck-through 2026-08-19 row in `CHANGELOG.md`.
 
-It did not fail cleanly. It flickered first, for about twelve hours —
-repeated `ok → STALLED → down → ok` cycles, **1,142 `down` heartbeats against
-15,750 `ok`** across the log — then `Cannot write to hid device: WriteFile:
-(0x0000048F) The device is not connected`, one worker respawn, and 1,174
-`not enumerating` messages. This is precisely the flicker-then-permanent-death
-curve the 19% one-star reviews describe, inside the predicted 1–8 week window.
+<details><summary>Superseded text — the hardware-death conclusion (wrong)</summary>
 
-**The next step is physical, in this order: cable, then port, then unit.**
+~~The panel is not working. It is not a software problem, and nothing in this
+repo can fix it. On 2026-08-29 — day 13 of ownership — the Thermalright Trofeo
+Vision stopped enumerating. Windows does not see the device at all: all four
+nodes under `VID_0416&PID_5302` are present in the registry with
+`Present: False`. It did not fail cleanly; it flickered first, for about twelve
+hours. This is precisely the flicker-then-permanent-death curve the 19%
+one-star reviews describe, inside the predicted 1–8 week window. The next step
+is physical, in this order: cable, then port, then unit.~~
 
-Ricky has said twice (2026-08-18) that he does not think it is the cable. That
-position stands and this handoff does not override it — **do not swap hardware
-on your own initiative.** What has changed is the cost of finding out: with the
-panel now fully absent, a new USB-C cable is a single test with two clean
-outcomes. Either the panel returns and the cable theory was right, or it does
-not and the theory is eliminated. It stopped being an argument and became an
-errand.
+**Every observation in that paragraph was accurate. The conclusion was not.**
+
+</details>
 
 **Everything else in the project is fine and running.** The daemon stayed up
-through the entire failure, kept fetching calendar and weather, kept rendering,
-and kept serving the browser fallback. That is exactly what the decoupled
-transport was built for, and it held on the day it was needed.
+through the whole disconnect, kept fetching calendar and weather, kept
+rendering, and kept serving the browser fallback — which is the decoupled
+transport working exactly as designed.
 
 ## What changed since the previous handoff
 
@@ -55,12 +56,12 @@ Two sessions, both small.
 glass.** Ricky mounted the panel upside down and asked for the display to be
 rotated; on his follow-up it became a settings feature the same session. He
 confirmed it on the physical panel — *"I checked the panel yesterday, the
-rotation looked good"* — which is the last known-good observation of this
-hardware.
+rotation looked good."*
 
-**2026-08-29 — the panel died, and every supervision layer called it healthy.**
-Found by the session-close verification gate, not by anyone looking for it.
-Opened as Sprint 8.
+**2026-08-29 — the panel appeared dead and every supervision layer called it
+healthy. It was unplugged.** Found by the session-close verification gate, and
+misdiagnosed there; see the correction above. The supervision blind spot it
+exposed is real regardless of the cause, and is now Sprint 8.
 
 ## Where the project lives
 
@@ -88,10 +89,10 @@ Opened as Sprint 8.
 | `npm run startup:status` | Task registration *and* whether the daemon is actually up |
 | `npm run startup:logs` / `watchdog:logs` | The two logs |
 | `npm run watchdog:test` | Forces the real end/sweep/run recovery sequence |
-| `npm run probe` | HID enumeration check — **currently finds nothing, correctly** |
+| `npm run probe` | HID enumeration check. Finds nothing while the panel is unplugged — which is correct, and is not evidence of a fault |
 | `npm run palette` | Regenerates `web/tokens.css`. Never hand-edit that file |
 
-**The browser fallback is the only working display surface right now:**
+**The browser fallback works whether or not the panel is plugged in:**
 `http://127.0.0.1:4780/panes/agenda/` — real merged calendar, live weather,
 correct colours. Settings at `http://127.0.0.1:4780/settings/palette/`.
 
@@ -124,18 +125,14 @@ correct colours. Settings at `http://127.0.0.1:4780/settings/palette/`.
 
 ## The next action
 
-**Get a panel back, or decide not to.** This needs Ricky and cannot be done
-from a session:
+**Plug the panel back in**, and confirm the daemon picks it up on its own
+(`[hid] open — PM=128 SUB=1` in `daemon.log`, then `panel=ok` in the
+heartbeat). The reconnect loop retries every 30s, so this should need no
+intervention at all — which is worth actually verifying once, since it has
+never been watched deliberately.
 
-1. Try a different USB-C cable. Highest-information single test available, and
-   it settles a question that has been open and disputed since 2026-08-18.
-2. If that fails, a different port, then conclude the unit.
-3. If the unit is dead, the decision is Ricky's: replace the same model
-   (~$37.90, known 3.7★ reliability), move to the 8.8"/1920×480 class that has
-   been circling in Future Explorations, or stop.
-
-Until then the project still runs and is still useful in the browser, but its
-whole point — ambient, glanceable, on the desk — is unavailable.
+Then **Sprint 8**, below. No hardware decision is pending and nothing needs
+buying.
 
 ## Then, in order
 
@@ -144,10 +141,12 @@ whole point — ambient, glanceable, on the desk — is unavailable.
    nothing about the panel; `PanelProxy` already derives `ok`/`STALLED`/`down`
    and the heartbeat already prints it. Wiring it into the health endpoint is
    likely the whole build. **Scope it to log loudly and NOT act** — restarting
-   the daemon fixes nothing when the USB device is gone, and a signal a dead
-   cable can assert forever is how a watchdog becomes a crash loop. Verifiable
-   only in the `down` direction until hardware returns; say so rather than
-   claiming it works.
+   the daemon fixes nothing when the USB device is absent, and a signal that a
+   routine unplug asserts for hours is how a watchdog becomes a crash loop —
+   it would have spent this Saturday restarting a healthy daemon because its
+   owner went downstairs. Both directions are testable simply by unplugging
+   the panel, which is a better fault injector than anything that needed
+   building.
 2. **Close the two cheap unverified items from Sprint 7**, both one-liners:
    click the settings Save button once by hand (its click path has never been
    exercised by a human — only the endpoint, via `curl`), and check the next
@@ -193,14 +192,14 @@ repeated here). New this session:
 
 ## Open questions for Ricky
 
-- **Cable, port, or unit?** Unanswerable from a session. See "Read this first."
-- **If the unit is dead, replace it with what?** Same model, the 8.8"/1920×480
-  class, or stop. This is a spending decision and a scope decision at once.
-- **What should a dead panel look like to a human who is not reading logs?**
-  Sprint 8 can report the state; it cannot decide how Ricky should find out. An
-  ambient display that has failed is indistinguishable from one nobody looked
-  at — which is exactly what happened for twelve hours.
+- ~~Cable, port, or unit?~~ **VOID — it was unplugged.**
+- ~~If the unit is dead, replace it with what?~~ **VOID — same reason.**
+- **What should a disconnected or dark panel look like to a human who is not
+  reading logs?** This one survives the correction and got sharper: the answer
+  has to distinguish "you unplugged it" (routine, most days) from "it stopped
+  working" (rare, alarming). Sprint 8 can report the state; it cannot decide
+  how Ricky should find out.
 - **Carried forward, still open:** whether `focusTime`/`outOfOffice` should ever
-  take the hero slot; whether 5 minutes is the right watchdog interval; and what
-  actually killed the daemon at 07:47:16 on 2026-08-24 (made survivable, never
-  diagnosed).
+  take the hero slot; whether 5 minutes is the right watchdog interval; what
+  actually killed the daemon at 07:47:16 on 2026-08-24; and the 2026-08-18
+  cable disagreement, which this session did not touch and did not resolve.
