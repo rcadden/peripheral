@@ -33,6 +33,17 @@ body {
     var(--ground);
 }
 
+/* Mounted upside down. Set by the ?rotate=180 flag the daemon appends (see
+   index.html) — never by a stylesheet edit, because the browser fallback must
+   stay upright for a human reading it at a desk.
+
+   Applied to .pane, not html/body: .pane is exactly --pane-w x --pane-h, so a
+   180-degree turn about its own centre lands back on the same box. No layout
+   is touched and nothing is resampled — 180 degrees is an exact pixel mapping,
+   so type quality on the glass is identical to upright. Nothing inside the
+   pane needs to know this happened. */
+html[data-rotate="180"] .pane { transform: rotate(180deg); }
+
 /* ── top bar ─────────────────────────────────────────────────────────────── */
 
 /* The bar is the body grid's own thin sibling: same three equal columns,

@@ -53,15 +53,19 @@ body {
   letter-spacing: 0.05em;
 }
 #zipInput:focus { outline: 1px solid var(--accent-hero); outline-offset: -1px; }
-#zipSaveBtn {
+/* Both section-level Save buttons share the cool accent; the palette's own
+   #saveBtn below uses the hero accent because it commits the whole palette,
+   not one field. Selectors grouped rather than the block copied a third
+   time — a third copy is where they start drifting apart. */
+#zipSaveBtn, #orientSaveBtn {
   font-family: var(--font-mono);
   font-size: 14px; font-weight: 600; letter-spacing: 0.05em;
   padding: 9px 18px;
   background: var(--accent-cool); color: var(--ground);
   border: none; border-radius: 4px; cursor: pointer;
 }
-#zipSaveBtn:active { opacity: 0.85; }
-#zipSaveBtn:disabled { opacity: 0.5; cursor: default; }
+#zipSaveBtn:active, #orientSaveBtn:active { opacity: 0.85; }
+#zipSaveBtn:disabled, #orientSaveBtn:disabled { opacity: 0.5; cursor: default; }
 
 .location-current { font-size: 13px; color: var(--text-dim); line-height: 1.6; }
 .location-current .place { color: var(--text); font-weight: 600; }
@@ -128,3 +132,12 @@ body {
 .status { font-size: 13px; color: var(--text-dim); }
 .status.ok { color: var(--accent-calendar-work); }
 .status.err { color: var(--stale); }
+
+/* Orientation radios sit in the same flex row as their Save button, reusing
+   .location-row's geometry and .source-toggle's label treatment rather than
+   inventing a third control style for a two-option choice. */
+.orient-row { gap: 18px; }
+.orient-row label { display: flex; align-items: center; gap: 6px; font-size: 13px;
+                    color: var(--text-dim); cursor: pointer; }
+.orient-row input[type="radio"] { accent-color: var(--accent-hero); }
+.orient-row label:has(input:checked) { color: var(--text); }

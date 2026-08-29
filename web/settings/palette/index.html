@@ -43,6 +43,26 @@
   </section>
 
   <section class="section-block">
+    <h2>Display orientation</h2>
+    <p class="sub">
+      Which way up the panel is physically mounted. This rotates only the
+      frame pushed to the glass — the pane URL you open in a browser stays
+      upright either way, so the fallback view stays readable at a desk.
+      There is deliberately no preview: a correctly-set 180° panel looks
+      upright on the glass, so the only honest confirmation is the panel
+      itself. Takes effect within moments of saving, no restart.
+      <span id="orientSourceNote"></span>
+    </p>
+    <div class="location-row orient-row" id="orientChoices" role="radiogroup"
+         aria-label="Display orientation">
+      <label><input type="radio" name="rotate" value="0"> Normal</label>
+      <label><input type="radio" name="rotate" value="180"> Upside down (180°)</label>
+      <button id="orientSaveBtn" type="button">Save</button>
+      <span class="status" id="orientStatus"></span>
+    </div>
+  </section>
+
+  <section class="section-block">
     <h2>Colour picker</h2>
     <p class="sub">
       The contrast gate is never optional — every swatch below is the exact
@@ -69,6 +89,7 @@
 
 </main>
 <script type="module" src="./weather-location.js"></script>
+<script type="module" src="./display.js"></script>
 <script type="module" src="./palette.js"></script>
 </body>
 </html>

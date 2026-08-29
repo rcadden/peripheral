@@ -63,6 +63,7 @@ import { NwsProvider } from './sources/weather.js';
 import { StateCache } from './cache.js';
 import { WeatherCache } from './weather-cache.js';
 import { WeatherLocationStore } from './weather-location.js';
+import { DisplaySettingsStore, resolveRotation } from './display-settings.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 /* What renderer.goto() reloads from — see watchPaneSource() below. */
@@ -71,6 +72,7 @@ const WEB_DIR = path.resolve(__dirname, '..', 'web');
 const SOURCE_INTERVAL_MS = 60_000;
 const FPS = Number(process.env.PERIPHERAL_FPS ?? 1);
 const RENDER_INTERVAL_MS = Math.max(250, Math.round(1000 / FPS));
+
 
 /* Stale after roughly five missed refreshes — long enough to ride out a Wi-Fi
  * blip, short enough that you don't trust a genuinely dead feed. */
@@ -98,6 +100,19 @@ let weatherConsecutiveFailures = 0;
 const cache = new StateCache();
 const weatherCache = new WeatherCache();
 const weatherLocationStore = new WeatherLocationStore();
+const displaySettingsStore = new DisplaySettingsStore();
+/* Physical mounting orientation, 0 or 180 (see display-settings.js for why
+ * only those two, and why a picker-saved value outranks PERIPHERAL_ROTATE).
+ *
+ * It USED to be a boot-only constant, on the reasoning that it describes how
+ * the hardware is bolted down and therefore cannot change while the daemon
+ * runs. True of the panel, false of the setting: once it moved into the
+ * settings UI (2026-08-28) a human can change it mid-run, and a control that
+ * needs a daemon restart to take effect is a control that looks broken. It is
+ * re-read from disk on the same file-watch pattern as the weather location. */
+let rotation = 0;
+/** Server origin, kept so the pane URL can be rebuilt when rotation changes. */
+let baseUrl = null;
 /* Reassigned, not mutated in place — a picker-saved location becomes a whole
  * new NwsProvider rather than patching fields on the running one, so a
  * fetch already in flight against the OLD grid can't be half-overwritten
@@ -409,6 +424,78 @@ async function reloadPaneWithRetry(reason, attemptsLeft = 6) {
  * again to force a clean reload.
  */
 /**
+ * The pane URL for a given orientation.
+ *
+ * Rotation rides on the URL rather than on disk because of the one structural
+ * decision (CLAUDE.md): the daemon screenshots the same page a human opens in
+ * a browser. A stylesheet edit would turn that human's fallback view upside
+ * down too. A query flag rotates only the frame going to the glass, from
+ * exactly the same source — see the [data-rotate] rule in agenda.css.
+ */
+function paneUrlFor(rotate) {
+  return `${baseUrl}/panes/agenda/${rotate ? `?rotate=${rotate}` : ''}`;
+}
+
+/**
+ * Pick up a picker-saved orientation, if it differs from what is on the glass
+ * right now. Cheap (one small local JSON read), and called both at boot and
+ * from watchDisplaySettings() below.
+ *
+ * Reloads the pane rather than restarting the daemon — a restart also bounces
+ * the HID device, which is not something to do because someone flipped a
+ * radio button. `reloadPaneWithRetry` navigates to the module-level `paneUrl`,
+ * so updating that first is what makes the new orientation take effect.
+ *
+ * @param {{initial?: boolean}} opts  at boot there is no renderer to reload
+ *   yet; main() opens it on the URL this sets.
+ */
+async function applyRotationIfChanged({ initial = false } = {}) {
+  const { rotate, source } = resolveRotation(await displaySettingsStore.load());
+  if (!initial && rotate === rotation) return;
+
+  rotation = rotate;
+  paneUrl = paneUrlFor(rotate);
+
+  if (initial) {
+    console.log(`[daemon] pane:  ${paneUrl}`);
+    console.log(`[daemon] display: rotated ${rotate} degrees (from ${source})`);
+    return;
+  }
+
+  console.log(`[daemon] display: rotation changed to ${rotate} degrees (from ${source}) — reloading pane`);
+  await reloadPaneWithRetry(`rotation ${rotate}`);
+}
+
+/**
+ * Watch display.json, so flipping the orientation in the settings UI reaches
+ * the glass within moments instead of at the next daemon restart. Same shape
+ * and same reasoning as watchWeatherLocation() below, including the debounce:
+ * an atomic temp-then-rename write can still surface as more than one fs
+ * event. Two watchers on the same directory is deliberate — each filters for
+ * its own filename, and one shared watcher would couple two unrelated
+ * settings into a single change handler.
+ */
+function watchDisplaySettings() {
+  const targetDir = path.dirname(displaySettingsStore.filePath);
+  const targetName = path.basename(displaySettingsStore.filePath);
+  let timer = null;
+  try {
+    watch(targetDir, (_event, filename) => {
+      if (filename && filename !== targetName) return;
+      clearTimeout(timer);
+      timer = setTimeout(() => void applyRotationIfChanged(), 300);
+    });
+    console.log(`[daemon] watching ${displaySettingsStore.filePath} for a picker-saved orientation`);
+  } catch (err) {
+    // Not fatal, but unlike the weather location there is no periodic timer
+    // to catch up on — nothing else re-reads this file while the daemon runs,
+    // so say plainly that a restart is now the only way to apply a change.
+    console.warn(`[daemon] display-settings file watch not available: ${err.message} `
+      + '— an orientation change will need a daemon restart to take effect');
+  }
+}
+
+/**
  * Watch weather-location.json and trigger an immediate out-of-cycle
  * refreshWeather() when the picker saves a new one — same shape as
  * watchPaneSource() below, and for the same reason: without this, a saved
@@ -457,8 +544,9 @@ function watchPaneSource() {
 
 async function main() {
   const { url } = await startServer();
-  const paneUrl = `${url}/panes/agenda/`;
-  console.log(`[daemon] pane:  ${paneUrl}`);
+  baseUrl = url;
+  // Sets the module-level paneUrl (and logs it) before anything opens it.
+  await applyRotationIfChanged({ initial: true });
 
   providers = buildProviders();
 
@@ -513,6 +601,7 @@ async function main() {
 
   watchPaneSource();
   watchWeatherLocation();
+  watchDisplaySettings();
 
   console.log(`[daemon] running — render every ${RENDER_INTERVAL_MS}ms on this ` +
               `thread, push every ${KEEPALIVE_INTERVAL_MS}ms on the transport ` +

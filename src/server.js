@@ -19,6 +19,7 @@ import { fileURLToPath } from 'node:url';
 import { sampleWallpaper, deriveTokens, regenerate } from './palette.js';
 import { PaletteOverridesStore, mergeHues } from './palette-overrides.js';
 import { WeatherLocationStore, resolveZipToGrid } from './weather-location.js';
+import { DisplaySettingsStore, resolveRotation, parseRotation, ROTATIONS } from './display-settings.js';
 import { NwsProvider } from './sources/weather.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -166,6 +167,57 @@ async function handleWeatherLocationSave(req, res) {
   }
 }
 
+/* Display-orientation plumbing (added 2026-08-28) — same shape as the two
+ * stores above, and coupled to the daemon the same one-directional way: this
+ * module only writes the file, and daemon.js picks the change up by watching
+ * it (see watchDisplaySettings there). server.js never reaches into the
+ * daemon's renderer, because daemon.js already imports server.js and the
+ * reverse edge would be circular.
+ *
+ * Unlike the weather-location save, there is nothing to resolve or confirm
+ * against a remote service — the value is one of two literals — so the
+ * response's job is just to report what is now in force, INCLUDING which
+ * source won, so the picker can say "an env var is being overridden" rather
+ * than leaving a human to wonder. */
+const displaySettings = new DisplaySettingsStore();
+
+async function handleDisplayGet(req, res) {
+  const resolved = resolveRotation(await displaySettings.load());
+  res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' })
+    .end(JSON.stringify({ ...resolved, options: ROTATIONS }));
+}
+
+async function handleDisplaySave(req, res) {
+  let body = '';
+  try {
+    for await (const chunk of req) {
+      body += chunk;
+      if (body.length > 1024) {
+        res.writeHead(413).end('too large');
+        return;
+      }
+    }
+    const parsed = JSON.parse(body);
+    // Validated here AND in the store. Two checks rather than one because
+    // this one can produce a 400 with a useful message, while the store's
+    // exists so nothing else in the process can ever write a value the
+    // daemon would have to ignore at boot.
+    if (parseRotation(parsed.rotate) === null) {
+      res.writeHead(400, { 'content-type': 'application/json' })
+        .end(JSON.stringify({ error: `expected {"rotate": ${ROTATIONS.join(' | ')}}` }));
+      return;
+    }
+
+    await displaySettings.save({ rotate: parsed.rotate });
+    const resolved = resolveRotation(await displaySettings.load());
+    res.writeHead(200, { 'content-type': 'application/json' })
+      .end(JSON.stringify({ ...resolved, options: ROTATIONS }));
+  } catch (err) {
+    res.writeHead(err instanceof SyntaxError ? 400 : 500, { 'content-type': 'application/json' })
+      .end(JSON.stringify({ error: err.message }));
+  }
+}
+
 async function serveStatic(req, res, urlPath) {
   // Resolve inside WEB_ROOT and verify — cheap defence against traversal.
   let rel = decodeURIComponent(urlPath).replace(/^\/+/, '');
@@ -204,6 +256,9 @@ const server = http.createServer(async (req, res) => {
   if (req.method === 'POST' && pathname === '/api/weather-location') {
     return void handleWeatherLocationSave(req, res);
   }
+  if (req.method === 'POST' && pathname === '/api/display') {
+    return void handleDisplaySave(req, res);
+  }
 
   if (req.method !== 'GET') return void res.writeHead(405).end('method not allowed');
 
@@ -212,6 +267,9 @@ const server = http.createServer(async (req, res) => {
   }
   if (pathname === '/api/weather-location') {
     return void handleWeatherLocationGet(req, res);
+  }
+  if (pathname === '/api/display') {
+    return void handleDisplayGet(req, res);
   }
 
   if (pathname === '/api/state') {

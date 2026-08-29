@@ -5,6 +5,20 @@
 <title>Peripheral — Agenda</title>
 <link rel="stylesheet" href="/tokens.css">
 <link rel="stylesheet" href="./agenda.css">
+<!-- Physical mounting orientation, NOT a design choice, so it is a render-time
+     flag rather than a stylesheet edit. The daemon appends ?rotate=180 when
+     PERIPHERAL_ROTATE says the panel is mounted upside down; a human opening
+     this URL in a browser gets no parameter and therefore an upright page.
+     Same source, same DOM, one transform at the very outside — this is NOT a
+     "panel version" of the pane (see CLAUDE.md, the one structural decision).
+     Inline and in <head> on purpose: it must run before first paint, or the
+     daemon can screenshot an upright frame during a reload. -->
+<script>
+  (function () {
+    var r = new URLSearchParams(location.search).get('rotate');
+    if (r === '180') document.documentElement.dataset.rotate = '180';
+  })();
+</script>
 </head>
 <body>
 <!-- Fixed 1280x480. This page is rendered two ways from one source:
