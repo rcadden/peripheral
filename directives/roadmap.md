@@ -949,6 +949,167 @@ supervised thing is running.* Nobody checked what the watchdog says while the
 attached, `down` is the only state reachable — which is enough to build
 against and not enough to prove the `ok` path still reports correctly.
 
+## Sprint 9 — Fish tank idle mode — **NOT STARTED, planned 2026-10-07**
+
+Planned in conversation, not in a build session. During free time the panel
+shows a realistic aquarium, generated entirely in code; the agenda takes over
+during events and in the lead-up to the next one. **Every piece of information
+lives inside the scene** — no header bar, no UI chrome.
+
+**Read the gate before anything else. This sprint collides with two standing
+rules, and the first build item exists to decide whether it survives them.**
+
+1. **"1 fps default. This panel has a reliability record; do not hammer it."**
+   (`src/transport/hid.js`.) A fish tank at 1 fps is a slideshow. Calm motion
+   needs roughly 10–15 fps — 10–15x the current HID write volume, on hardware
+   with a 19% one-star rate and a flicker-then-death pattern in its reviews.
+   Nobody knows whether the transport *can* sustain that, and nobody knows
+   whether sustaining it shortens the panel's life. The first is measurable;
+   the second is not, and is a risk Ricky has to choose to take.
+2. **Brand & Design: "flat near-black ground… no photographic background."**
+   The tank is the opposite of that by design. It is an *idle mode*, not a
+   restyle of the agenda — the agenda pane keeps its rules untouched — but the
+   departure is deliberate and should be read as one.
+
+**Does not reopen multi-pane cycling** (Sprints 3–4, not pursued 2026-08-20).
+The tank is a state-driven idle mode, not a pane in a rotation: the agenda is
+on screen whenever it has something to say, and there is no cycle timer.
+
+**Keeps the one structural decision.** The tank is a page at
+`/panes/tank/`, openable in any browser, animating natively there — the same
+page the daemon renders. If the readout path changes from Playwright
+screenshots to reading frames off the page's own canvas, that is a change to
+*how* the daemon captures, not a forked "panel version."
+
+### The gate — spike first, stop if it fails
+
+- [ ] **Measure the transport's ceiling.** Push a synthetic animated sequence
+      (`npm run`-able, guarded like `idle-test`) at stepped rates — 2, 5, 10,
+      15 fps — and record sustained throughput, `worstPush`, and whether the
+      glass flickers. Note: `RENDER_INTERVAL_MS` floors at 250ms today, so the
+      render side caps at 4 fps before the transport is even asked.
+- [ ] **Measure it under load** (Teams call + a build) — the same standing-watch
+      item, now load-bearing.
+- [ ] **Confirm WebGL is on the GPU.** Headless Chromium can fall back to
+      SwiftShader silently. Launch with ANGLE/D3D11 flags and check the
+      renderer string reports Intel Iris Xe. If headless won't take the GPU,
+      a hidden headful window.
+- [ ] **`NEEDS RICKY`: decide the cadence against the reliability risk.** The
+      measured ceiling says what is possible; it does not say what is wise on
+      this panel. Options include a low animated rate (e.g. 4–6 fps with slow,
+      drifting motion designed for it), or animating only some of the time.
+      This decision sets the motion budget for everything below.
+- [ ] **Water lighting alone, on the glass.** Second gate: if the spike plus
+      the lighting do not look convincing *on the panel* — not in a browser —
+      stop here.
+
+### Mode rule
+
+`resolveMode(now, events, leadMinutes) → 'agenda' | 'tank'`, pure, called
+each render tick.
+
+- Event in progress → `agenda`.
+- Next event starts within `leadMinutes` (default **10**) → `agenda`.
+- Otherwise → `tank`, including when nothing remains today.
+- Gaps of `leadMinutes` or less never switch to the tank — no flicker between
+  back-to-back meetings.
+- All-day events ignored (the 2026-08-17 rule: context, never focus).
+  Free/transparent and declined events ignored — same filter as "happening
+  now."
+- Hard cut at T-lead for v1.
+
+- [ ] `resolveMode` with fixture tests: back-to-back, all-day only, empty day,
+      event in progress, 9- vs 11-minute gap, `workingLocation` noise.
+- [ ] `leadMinutes` in `display.json` via `DisplaySettingsStore`, a field at
+      `/settings/palette/`, applied by the existing file watch without a
+      restart — the Sprint 7 pattern.
+
+### Visual direction
+
+Ricky supplied a reference photo 2026-10-07 (not committed — it is not ours).
+A planted nature aquascape: plants and hardscape dominate, fish are accents.
+
+- **Aspect ~2.7:1**, near-identical to the glass's 2.67:1 — compose natively.
+- Dark branching driftwood forming a central arch, moss on upper surfaces,
+  rounded pebbles.
+- Red/orange/pink stem plants deepening toward the tips, broad-leaf ferns, a
+  dense bright-green carpet, fine grass at the edges.
+- A pale sand path running front-centre into depth; darker gravel at edges.
+- Light bar visible at top; mirrored reflection band at the water surface;
+  frosted bright backdrop with a soft gradient and shimmer lines; glass edges
+  and silicone corners visible.
+- A small neon-tetra school, mid-water.
+
+**No assets — everything generated in code** (noise, SDFs, L-systems,
+procedural meshes; WebGL2 via three.js). Target: a convincing aquarium at a
+glance from three feet, not photoreal. Fixed camera, side view.
+
+Realism priority, in build order:
+1. Water light — caustics, god rays, depth fog, lit particulates, surface
+   reflection band, light bar, backdrop.
+2. Hardscape — procedural driftwood (bark noise, crevice darkening), moss by
+   upward-facing normals, pebbles.
+3. Plants — L-system stems with instanced leaves, ferns, carpet as instanced
+   micro-leaves, edge grass; sway in a slow current field (vertex shader).
+4. Fish — spine-based travelling-wave bodies, boids for schooling species,
+   species behaviours, view-angle iridescence, translucent rim-lit fins.
+5. Substrate and surface — sand, pebble scatter, meniscus, Fresnel, ripples.
+
+**Performance:** generate the scene at startup and bake static layers
+(backdrop, hardscape, base foliage) to textures once; per frame, animate only
+sway, fish, caustics, particulates and the surface.
+
+### A new tank every day
+
+- Seed = local date: the same day always produces the same tank, across
+  restarts.
+- Layout varies within the style — arch shape, plant mix and colour balance,
+  carpet extent, path curve, scatter — under composition rules that keep it
+  reading as a deliberate aquascape (open centre path, tall at back and sides,
+  low in front).
+- Fish vary: code-defined species presets (body spline, fins, pattern
+  functions, size, swim style, depth band, behaviours), picked as a plausible
+  community — one schooling species (neon, cardinal, ember, rummy-nose,
+  harlequin, chili rasbora), optionally one centrepiece (honey, dwarf or pearl
+  gourami), optionally one grazer group (corydoras, otocinclus, Amano or
+  cherry shrimp). Count capped by the measured frame budget.
+- Rebuilt at 03:00 under night lighting: fade to dark, swap, fade back.
+
+### Diegetic information
+
+| Information | In the scene |
+|---|---|
+| Next meeting (title + "in 42m") | A flat inscribed slate stone in the sand path, foreground centre. Carved lettering at high contrast — legibility beats subtlety. Updates once a minute; glows faintly from ~T-20. |
+| Outdoor temperature (`NwsProvider`) | A stick-on digital thermometer on the glass, lower right |
+| Clock | The same thermometer unit |
+| Conditions | Rain/snow: drops on the surface. Overcast: dimmer, cooler light. Clear: strong caustics. |
+| Time of day | Light bar colour and intensity follow local sunrise/sunset, computed from the weather location — no extra API. Moonlight blue at night. |
+
+The stone's carved text is an SDF used as a normal/depth map, so caustics fall
+into the letters and fish pass in front of it.
+
+**Open, connected to an existing exploration:** what the stone shows when
+nothing remains today. "Tomorrow's first event when today is done" is already
+a Future Exploration for the agenda; the stone is a natural home for it.
+
+### Open questions for Ricky
+
+- [ ] The cadence decision above — the one that matters.
+- [ ] Overnight and weekends: tank always (recommended — the sunset-driven
+      light bar already makes a natural night mode), or blank/extra-dim
+      outside an hour range.
+- [ ] What the stone shows after the last event of the day.
+
+### Risks
+
+- The panel's reliability record, now multiplied by the write rate. The
+  2026-08-29 rule applies doubly: **a flicker after this ships is not
+  evidence the tank killed the panel until the cable has been checked.**
+- Software-GL fallback silently tanking frame rate (the spike catches it).
+- Dense instanced foliage is the largest render cost — baking is load-bearing.
+- Composition rules are what separate "aquascape" from "random plants";
+  expect iteration against the reference, on the glass.
+
 ## Future Explorations
 - **Tomorrow's first event when today is done — moved here 2026-08-20** from
   the shelved Sprint 4. Doesn't need the multi-pane system or cycling: it's a
