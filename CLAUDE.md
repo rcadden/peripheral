@@ -174,8 +174,24 @@ those two things happens most days. Sprint 8 stays scoped to **log loudly, do
 not act**: a watchdog restarting the daemon on `panel=down` would have spent the
 afternoon restarting a healthy daemon because its owner went downstairs.
 
+**Sprint 9 — Fish tank idle mode — built 2026-10-08 in one overnight
+session, NOT YET SEEN ON THE GLASS.** During free time the panel shows a
+procedurally generated aquarium (`web/panes/tank/`, three.js vendored); the
+agenda takes the glass back during events and 10 minutes before the next one.
+The next meeting is carved into a slate stone in the sand, the clock and
+outdoor temperature are on a stick-on thermometer, the light follows the real
+sun, and the layout and fish change every day at 03:00. Ricky's calls before
+bed: **4 fps**, **on by default with an off switch**, the stone shows
+**tomorrow's first event** after hours, **tank always** overnight. **The
+roadmap's gate (measure the transport, confirm the GPU) was not run first** —
+no panel, Windows or GPU in the build container — so it runs now:
+`npm run fps-test` measures the panel, `[tank] webgl renderer:` in
+`daemon.log` answers the GPU question, and a hard 4 fps ceiling lives in the
+transport (`src/transport/cadence.js`). Verified by rendering, a dry-run
+daemon and 187 tests; everything Windows is unverified.
+
 > **Starting a session? Read
-> [`docs/plans/session-handoff-2026-08-29.md`](docs/plans/session-handoff-2026-08-29.md)
+> [`docs/plans/session-handoff-2026-10-08.md`](docs/plans/session-handoff-2026-10-08.md)
 > first.** It has the ordered next actions, what is verified and by what
 > method, and the open questions that need Ricky.
 
@@ -293,6 +309,7 @@ This is why the renderer is decoupled from the transport (see below).
 | Transport | `node-hid` | Pushes JPEG frames to `0416:5302`. |
 | Palette | `sharp` (optional dep) | Wallpaper → tokens. Falls back to committed defaults. |
 | Calendar | Google Calendar API, **read-only** | `calendar.readonly` scope. Nothing writes, ever. |
+| Fish tank (Sprint 9) | **three.js r170, vendored** as one file in `web/vendor/` | WebGL scene for the idle-mode pane. Vendored, not npm, so the server still runs on a bare clone with zero deps; MIT licence alongside. |
 
 No Supabase, no Cloudflare, no n8n. **Fully local by design** — the panel is
 USB-powered by this PC, so if the PC sleeps the screen is dark regardless.
@@ -327,7 +344,7 @@ is the contract.
 | Token store | `%LOCALAPPDATA%\Peripheral\tokens.json` — **outside the repo on purpose.** A refresh token has no business in a project directory. Override with `PERIPHERAL_TOKEN_PATH`. |
 | Personal calendar | `grcadden@gmail.com` — confirmed reachable. Also natively shared **into** the work calendar, which is how the primary gets it. |
 | Work calendar (Balcom) | **PRIMARY account — critical path.** Direct OAuth, untested. Sharing work→personal is confirmed blocked; see below. |
-| Display settings | `%LOCALAPPDATA%\Peripheral\display.json` — panel orientation saved by `/settings/palette/`. **Beats `PERIPHERAL_ROTATE`**, which is only the default. Override the path with `PERIPHERAL_DISPLAY_PATH`. |
+| Display settings | `%LOCALAPPDATA%\Peripheral\display.json` — panel orientation saved by `/settings/palette/`. **Beats `PERIPHERAL_ROTATE`**, which is only the default. Since Sprint 9 it also holds the fish tank's `enabled` / `leadMinutes` / `fps` (no env var for those). Override the path with `PERIPHERAL_DISPLAY_PATH`. |
 | State cache | `%LOCALAPPDATA%\Peripheral\last-state.json` — last-good agenda, restored at boot. Holds real event titles, so **outside the repo**; this repo goes public. Override with `PERIPHERAL_STATE_PATH`. |
 | Daemon log | `%LOCALAPPDATA%\Peripheral\daemon.log` — written by the logon task, rotated at 5MB. `npm run startup:logs` |
 | Watchdog log | `%LOCALAPPDATA%\Peripheral\watchdog.log` — one line per 5-minute check, healthy ones included, rotated at 1MB. `npm run watchdog:logs`. **First thing to read after any morning the panel looked wrong.** |
@@ -445,9 +462,35 @@ interchangeably. Nothing else in the build depends on which one we get.
   6.86" read from three feet.
 - Regenerate with `npm run palette`. `web/tokens.css` is generated — never
   hand-edit it.
+- **The fish tank (Sprint 9) departs from all of the above on purpose.** It is
+  an idle mode, not a restyle: a lit, colourful, photographic-feeling scene
+  where the agenda is flat near-black. The agenda's rules are untouched; the
+  tank's only obligations are that its information (stone, thermometer) stays
+  high-contrast at every light level and that it never hides a meeting.
 - Type scale is tuned for 6.86" read from ~3 feet, not for a desktop monitor.
 
 ## Lessons Learned
+- **2026-10-08 — A generated part that is small in the composite can be wrong
+  for as long as nobody looks at it alone.** Every procedurally painted fish
+  was a teardrop with a needle nose — the body-depth exponent put the deepest
+  point at the tail — and in the full scene, at 30–50px, it read as "fish"
+  well enough to survive two rounds of scene screenshots. A contact sheet of
+  the thirteen species at 2x caught it in one look. The same session's
+  driftwood had its highlights on the underside (a light vector named for
+  where light comes FROM, used as where it GOES), which also only became
+  obvious once moss — which keys off that normal — refused to grow.
+  **Standing rule: when a scene is assembled from generated parts, render each
+  part in isolation, enlarged, before judging the composite.** And name
+  direction vectors for which way they point (`toLight`, `lightTravel`), never
+  just `LIGHT`.
+- **2026-10-08 — The losing side of a `Promise.race` timeout is still armed.**
+  `render.js` raced a page call against `new Promise((_, rej) =>
+  setTimeout(rej, 2000))`. When the page call wins, the timer still fires and
+  rejects a promise nobody is listening to — at 4 captures a second — and an
+  unhandled rejection terminates Node. Caught re-reading the diff, before the
+  first run. **Standing rule: every race timeout gets its `clearTimeout` in a
+  `finally`.** In a daemon whose first rule is "never stop", a timer is a
+  latent crash until it is cleared.
 - **2026-08-29 — SECOND OCCURRENCE: an unplugged panel is indistinguishable
   from a dead one, and the exclusion test that exists for this does not cover
   it.** The session-close gate found `panel=down`, the device absent from

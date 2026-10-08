@@ -1,0 +1,40 @@
+/* The tank is one canvas. Everything it shows lives inside the scene — no
+   header bar, no UI chrome (Sprint 9 roadmap) — so this file is only the
+   frame, the orientation flag, and the no-WebGL fallback. */
+
+html, body {
+  margin: 0;
+  background: #000;
+  overflow: hidden;
+}
+
+.pane {
+  position: relative;
+  width: 1280px;
+  height: 480px;
+  overflow: hidden;
+  background: #000;
+}
+
+#tank {
+  display: block;
+  width: 1280px;
+  height: 480px;
+}
+
+/* Same rule and same reasoning as agenda.css: the flag rotates the frame sent
+   to an upside-down panel, never the page a human opens. */
+html[data-rotate="180"] .pane { transform: rotate(180deg); }
+
+.fallback {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  color: #eaeef0;
+  font: 600 24px "Cascadia Mono", Consolas, ui-monospace, monospace;
+}
+.fallback[hidden] { display: none; }
+.fallback a { color: #79a1c8; }

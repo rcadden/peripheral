@@ -141,3 +141,17 @@ body {
                     color: var(--text-dim); cursor: pointer; }
 .orient-row input[type="radio"] { accent-color: var(--accent-hero); }
 .orient-row label:has(input:checked) { color: var(--text); }
+
+/* Fish tank controls (Sprint 9) — same row language as the orientation
+   control; the number and select inherit the zip input's look. */
+.orient-row input[type="checkbox"] { accent-color: var(--accent-hero); }
+.num-input, #tankFps {
+  width: 56px;
+  font: inherit;
+  color: var(--text);
+  background: var(--ground-2);
+  border: 1px solid var(--rule);
+  padding: 4px 6px;
+}
+#tankControls { flex-wrap: wrap; }
+#tankControls label { white-space: nowrap; }

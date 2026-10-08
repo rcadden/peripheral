@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Peripheral — Tank</title>
+<link rel="stylesheet" href="./tank.css">
+<!-- Same orientation flag as the agenda pane (see agenda/index.html): the
+     daemon appends ?rotate=180 for an upside-down mount, a human opening this
+     URL gets an upright page. Inline and in <head> so it runs before first
+     paint.
+
+     __paneReady: the tank bakes its scene for a second or two after load.
+     render.js waits for this to flip true before it captures, so the first
+     frame pushed after a switch is the tank, not a black canvas. Panes that
+     never set it (the agenda) are ready on load. -->
+<script>
+  (function () {
+    var r = new URLSearchParams(location.search).get('rotate');
+    if (r === '180') document.documentElement.dataset.rotate = '180';
+    window.__paneReady = false;
+  })();
+</script>
+</head>
+<body>
+<!-- Sprint 9 — fish tank idle mode. Fixed 1280x480, rendered two ways from one
+     source like every pane: screenshotted by the daemon during free time, and
+     opened in any browser, where it animates natively.
+
+     Preview flags for a human at a desk (none of them are used by the daemon):
+       ?hour=21.5        light the tank as if it were 9:30 PM
+       ?weather=rain     clear | cloudy | rain | snow | storm
+       ?seed=2026-10-09  show another day's tank
+       ?fps=4            animate at the glass's rate instead of the browser's -->
+<main class="pane" id="pane">
+  <canvas id="tank" width="1280" height="480"></canvas>
+  <div class="fallback" id="fallback" hidden>
+    <p>This browser could not start WebGL, so the tank cannot draw.</p>
+    <p>The agenda is at <a href="/panes/agenda/">/panes/agenda/</a>.</p>
+  </div>
+</main>
+<script type="module" src="./tank.js"></script>
+</body>
+</html>

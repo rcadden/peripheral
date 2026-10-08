@@ -19,7 +19,10 @@ import { fileURLToPath } from 'node:url';
 import { sampleWallpaper, deriveTokens, regenerate } from './palette.js';
 import { PaletteOverridesStore, mergeHues } from './palette-overrides.js';
 import { WeatherLocationStore, resolveZipToGrid } from './weather-location.js';
-import { DisplaySettingsStore, resolveRotation, parseRotation, ROTATIONS } from './display-settings.js';
+import {
+  DisplaySettingsStore, resolveRotation, parseRotation, ROTATIONS,
+  resolveTank, validateTankStrict, TANK_FPS_OPTIONS, TANK_LEAD_RANGE,
+} from './display-settings.js';
 import { NwsProvider } from './sources/weather.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -181,10 +184,21 @@ async function handleWeatherLocationSave(req, res) {
  * than leaving a human to wonder. */
 const displaySettings = new DisplaySettingsStore();
 
+/** Everything the settings page shows: rotation (with its source) and the
+ * fish tank's settings (Sprint 9), plus the options each control offers. */
+async function displayPayload() {
+  const saved = await displaySettings.load();
+  return {
+    ...resolveRotation(saved),
+    options: ROTATIONS,
+    tank: resolveTank(saved),
+    tankOptions: { fps: TANK_FPS_OPTIONS, lead: TANK_LEAD_RANGE },
+  };
+}
+
 async function handleDisplayGet(req, res) {
-  const resolved = resolveRotation(await displaySettings.load());
   res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' })
-    .end(JSON.stringify({ ...resolved, options: ROTATIONS }));
+    .end(JSON.stringify(await displayPayload()));
 }
 
 async function handleDisplaySave(req, res) {
@@ -202,16 +216,37 @@ async function handleDisplaySave(req, res) {
     // this one can produce a 400 with a useful message, while the store's
     // exists so nothing else in the process can ever write a value the
     // daemon would have to ignore at boot.
-    if (parseRotation(parsed.rotate) === null) {
+    //
+    // Either field may be sent alone (Sprint 9): the orientation control
+    // posts {rotate}, the fish tank controls post {tank}, and the store
+    // merges so neither clobbers the other.
+    const patch = {};
+    if (parsed.rotate !== undefined) {
+      if (parseRotation(parsed.rotate) === null) {
+        res.writeHead(400, { 'content-type': 'application/json' })
+          .end(JSON.stringify({ error: `expected {"rotate": ${ROTATIONS.join(' | ')}}` }));
+        return;
+      }
+      patch.rotate = parsed.rotate;
+    }
+    if (parsed.tank !== undefined) {
+      try {
+        patch.tank = validateTankStrict(parsed.tank);
+      } catch (err) {
+        res.writeHead(400, { 'content-type': 'application/json' })
+          .end(JSON.stringify({ error: err.message }));
+        return;
+      }
+    }
+    if (!Object.keys(patch).length) {
       res.writeHead(400, { 'content-type': 'application/json' })
-        .end(JSON.stringify({ error: `expected {"rotate": ${ROTATIONS.join(' | ')}}` }));
+        .end(JSON.stringify({ error: 'expected {"rotate": ...} and/or {"tank": {...}}' }));
       return;
     }
 
-    await displaySettings.save({ rotate: parsed.rotate });
-    const resolved = resolveRotation(await displaySettings.load());
+    await displaySettings.save(patch);
     res.writeHead(200, { 'content-type': 'application/json' })
-      .end(JSON.stringify({ ...resolved, options: ROTATIONS }));
+      .end(JSON.stringify(await displayPayload()));
   } catch (err) {
     res.writeHead(err instanceof SyntaxError ? 400 : 500, { 'content-type': 'application/json' })
       .end(JSON.stringify({ error: err.message }));

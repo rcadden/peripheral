@@ -165,6 +165,8 @@ export class PanelProxy {
   #lastWatchdogAt = 0;
   /** How long this thread was demonstrably not listening. See stallState(). */
   #mainLagMs = 0;
+  /** Requested push cadence, re-sent to a respawned worker. See setCadence(). */
+  #minGapMs = KEEPALIVE_INTERVAL_MS;
 
   get info() { return this.#info; }
   get lastError() { return this.#lastError; }
@@ -269,6 +271,10 @@ export class PanelProxy {
     });
 
     this.#worker.on('message', (msg) => this.#onMessage(msg));
+    // A respawned worker starts at the agenda's 1 fps; tell it what we want.
+    if (this.#minGapMs !== KEEPALIVE_INTERVAL_MS) {
+      this.#worker.postMessage({ type: 'cadence', minGapMs: this.#minGapMs });
+    }
 
     this.#worker.on('error', (err) => {
       this.#lastError = err;
@@ -381,6 +387,19 @@ export class PanelProxy {
     copy.set(jpeg);
     this.#worker.postMessage({ type: 'frame', jpeg: copy, seq: ++this.#seq },
                              [copy.buffer]);
+  }
+
+  /**
+   * How soon a NEW frame may follow the previous push (Sprint 9). The agenda
+   * uses the keepalive interval — the original 1 fps behaviour, unchanged —
+   * and the fish tank asks for 1000/fps. The worker clamps it to the hard
+   * ceiling in cadence.js, so a bad value here cannot hammer the panel.
+   *
+   * @param {number} minGapMs
+   */
+  setCadence(minGapMs) {
+    this.#minGapMs = minGapMs;
+    this.#worker?.postMessage({ type: 'cadence', minGapMs });
   }
 
   async close() {

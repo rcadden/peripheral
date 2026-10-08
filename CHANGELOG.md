@@ -1511,6 +1511,200 @@ last wrong conclusion got built. Left open.
   endpoint was driven with `curl`, the radio and status logic in a real browser.
   Confirm by: clicking it once at `/settings/palette/`.
 
+### Added — Sprint 9, the fish tank idle mode (2026-10-08, overnight build)
+
+Built overnight from the roadmap's Sprint 9 plan, after ten-or-fewer questions
+answered by Ricky before he went to bed. His answers, verbatim choices:
+
+| Question | Answer |
+|---|---|
+| Tank frame rate (the roadmap's `NEEDS RICKY` cadence call) | **4 fps** |
+| On by default after pulling, or opt-in | **On, with an off switch** |
+| What the stone shows after the last event | **Tomorrow's first event** |
+| Overnight and weekends | **Tank always** (sunset-driven light is the night mode) |
+| Close-out | **Full `/session-close`** — including fast-forwarding `main` |
+| three.js delivery | **Vendor one pinned file** |
+
+**The roadmap's gate was not run, and could not have been.** This was built in
+a cloud container with no panel, no Windows, and no GPU. Ricky chose 4 fps
+knowing that, and asked for the build anyway; the gate items move from "stop
+if it fails" to "measure in the morning, back off if it fails". The tool for
+that is part of this build — see `npm run fps-test` below.
+
+**What it is.** During free time the panel shows a planted aquarium generated
+entirely in code — no assets. `web/panes/tank/` is an ordinary pane URL, so
+the one structural decision holds: the daemon screenshots the same page a
+browser opens, and it animates natively in either.
+
+- **Mode rule** — `web/panes/tank/mode.js`, `resolveMode(now, events, lead)`,
+  pure and tested against every fixture the roadmap named (back-to-back,
+  all-day only, empty day, in progress, 9- vs 11-minute gap, workingLocation)
+  plus four more: no calendar state at all is **agenda**, not an empty day
+  (the tank would otherwise silently assert "nothing scheduled"); a "Show as:
+  Free" event does not count; an unclaimed personal event does not take the
+  glass; the production-meeting 30-minute override hands back at 30. It uses
+  the agenda's own `selectAgenda()`, so the two panes cannot disagree about
+  what is on.
+- **Daemon** — every render tick (now 250ms) asks `resolveMode()`; on a change
+  it points the one Playwright page at the other pane and tells the transport
+  its new cadence. Logs `mode: agenda -> tank (next event …)`. The heartbeat
+  gains `mode=`. If the tank page reports it cannot run (no WebGL), the daemon
+  goes back to the agenda and does not retry until midnight or a settings
+  change — a broken tank is never left on the glass.
+- **Transport cadence** — `src/transport/cadence.js`, a pure `pushDue()` the
+  worker checks every 25ms. A new frame may follow the last push after
+  `minGapMs` (1000 for the agenda — the exact old behaviour — 250 for the tank
+  at 4 fps); the 1s keepalive still re-pushes regardless. **Hard ceiling of
+  4 fps in the transport itself** (`MAX_FPS`), whatever anyone asks for.
+  Only `PERIPHERAL_MAX_FPS` raises it, and nothing sets that.
+- **Renderer** — waits for a pane's `window.__paneReady` after load (the tank
+  bakes for a moment), calls `window.__beforeCapture()` before each screenshot
+  so an animated pane draws exactly one frame per capture instead of running a
+  60 Hz loop in headless Chromium, forwards `[tank]` log lines to the daemon
+  log, and on Windows launches Chromium with ANGLE/D3D11 GPU flags. Still
+  knows nothing about what any pane means.
+- **The scene** — three.js r170, vendored as one file
+  (`web/vendor/three-0.170.0.module.min.js`, MIT, licence alongside,
+  sha256 `08fd7545…c39e7`). Static layers are painted once into canvases at
+  build time (backdrop, far plants, driftwood + moss, mid plants, substrate,
+  foreground, glass) and stacked as planes; per frame only shaders move:
+  plant sway, caustics, god rays, particulates, the reflection band and rain
+  rings on the surface, and the fish. Fish are boids (schooling species) and
+  small state machines (gourami cruising, corydoras darting along the sand,
+  otocinclus parked on the wood, shrimp walking), with depth that moves them
+  in front of and behind the wood, a tail-beat vertex wave, turn-through-zero,
+  and stripe iridescence.
+- **Motion designed for 4 fps** — tail beats capped at 1.5 Hz (under the 2 Hz
+  Nyquist limit of a 4 fps sample, pinned by a test), cruising speeds slow
+  enough that a fish moves 5–8px a frame, sway periods 6–15s.
+- **A new tank every day** — `layout.js`, seeded by the local date, rebuilt at
+  **03:00** with a 3s fade (so 01:00 still shows yesterday's tank, and a
+  restart shows the same one). Varies arch, path curve, plant colour mood,
+  carpet extent, scatter, and the community: one schooling species of six,
+  optionally one centrepiece of three gouramis, optionally one grazer group of
+  four. Composition rules are tested across a full year of seeds: the path
+  always runs back under the arch, tall stems only at the back corners,
+  nothing tall in front, never more than 30 animals.
+- **Information inside the scene** — the next meeting carved into a slate
+  stone in the sand path (`IN 42 MIN` / `2:30 PM  Design review`, the agenda's
+  own wording), glowing faintly from T-20; tomorrow's first event once today
+  is done (`TOMORROW 9:00 AM`); `ALL CLEAR` when there is nothing. A stick-on
+  LCD thermometer, lower right, with the clock and outdoor temperature, and an
+  amber `STALE` in place of `OUT` when the data is stale. The stone's
+  lettering never drops below 85% brightness, so it stays legible at night.
+- **Light from the real sky** — `sky.js` computes solar altitude for the
+  weather location (NOAA low-precision algorithm; sunset on 2026-10-08 in
+  Asheville lands within the tested 6:50–7:30 PM window) and drives the light
+  bar colour, intensity, caustics and rays: daylight, golden hour, twilight,
+  moonlight blue. Overcast is dimmer and cooler with weak caustics; rain and
+  snow put rings on the surface. `/api/state` gains `location` for this.
+- **Tomorrow's events** — `ApiProvider.fetchDays()` widens the **same**
+  request to two days and `splitDays()` puts each event back on its own day,
+  so `state.events` still means exactly "today" for everything that already
+  read it, and the API call count is unchanged. New `state.tomorrow`.
+  `normaliseEvent()` now carries `transparent: true` for "Show as: Free".
+  The cache signature includes `tomorrow`.
+- **Settings** — a "Fish tank" section at `/settings/palette/`: on/off, lead
+  minutes (1–60, default 10), frame rate (1–4, default 4). Stored in
+  `display.json` beside rotation; each control saves without clobbering the
+  other; an empty lead field is refused, not coerced to 0 (the 2026-08-29
+  `Number('')` rule). Applied by the existing file watch, **no restart**.
+- **`npm run fps-test`** — the roadmap's first gate item as a tool. Pushes a
+  synthetic animated sequence (sized ~150KB, slightly heavier than a real tank
+  frame, so it errs pessimistic) to the real panel at 2, 4, 5, 10 and 15 fps,
+  20s each, and prints achieved rate, push avg/p95/worst, failures and late
+  pushes per step, with a line for what the glass did. Talks to the device
+  directly, bypassing the 4 fps ceiling — the one sanctioned way to ask for
+  more. Refuses to run under `node --test`. Requires the daemon stopped
+  (`npm run startup:uninstall` first, `startup:install` after).
+- **Preview flags** on the tank URL for a human at a desk: `?hour=21.5`,
+  `?weather=rain`, `?seed=2026-10-09`, `?fps=4`.
+
+**Verification, by tier (session-close Step 0):**
+
+- **Seen on the glass:** nothing. Ricky was asleep; there is no panel here.
+- **Rendered:** the tank captured through headless Chromium (SwiftShader)
+  at day, golden hour, cloudy, rain and night, across six seeds, and every
+  species painted to a contact sheet and read. Several real defects were
+  found this way and fixed before commit (see Fixed below). The rotated
+  (`?rotate=180`) tank frame read and confirmed upside down.
+- **Measured** (dry-run daemon, `PERIPHERAL_DRY_RUN=true`, SwiftShader, Linux):
+  tank build **~170–400ms**; a tank capture **~120–250ms**, inside the 250ms
+  budget even on software GL; tank-mode push gaps **mean 254ms, min 250ms,
+  max 376ms** over 134 pushes (3.94 fps, never above the ceiling); agenda-mode
+  gaps **mean 1008ms** (unchanged); mode switched agenda → tank at boot and
+  tank → agenda **exactly at T-10**; a mid-run `display.json` edit took the
+  tank from 4 fps (20 frames/5s) to 2 fps (10/5s) and then to off (agenda,
+  5/5s) without a restart; rotation survived every switch.
+- **Tested:** `npm test` **187/187** (128 at the starting commit, re-run to
+  check; +59 — cadence, tank settings, mode rule, two-day fetch,
+  layout/sky/stone/fish).
+  The settings page driven in a real browser: load, edit, "not saved yet",
+  save, empty-lead refusal, and an orientation save preserving tank fields.
+- **Written but unverified:** everything Windows. Whether headless Chromium
+  takes the Iris Xe with the ANGLE flags (the tank logs
+  `[tank] webgl renderer: …` on every load — that line is the answer);
+  whether the panel sustains 4 fps; whether it flickers; real CPU cost on
+  Ricky's machine; whether the tank looks convincing **on the glass**, which
+  is the roadmap's own second gate.
+- **Claims NOT made:** that 4 fps is safe for this panel's lifespan (not
+  measurable); that the tank is the right thing to show (only the glass and
+  Ricky close that); that the mode rule is right against his real calendar —
+  see Known unknowns.
+
+### Fixed — before it ever shipped, found by rendering (2026-10-08)
+- **Every fish was a teardrop with a needle nose.** The body contour
+  `sin(π·u^k)` peaks where `u^k = ½`, and the first version used `k < 1`,
+  which puts the deepest point near the *tail*. Caught on a contact sheet of
+  all thirteen species, not in the scene, where the fish are small enough to
+  hide it. Now `k = ln ½ / ln peak`, deepest ~40% back from the nose, with a
+  blunted snout.
+- **The driftwood's lit side was its underside.** `LIGHT` was the direction
+  *toward* the light while the normal flip treated it as the direction light
+  travels, so every highlight sat on the bottom of every limb — and moss,
+  which grows on lit, upward-facing surfaces, grew nowhere. One sign; the arch
+  went from bare to mossy.
+- **The stone hid the path.** The substrate band was 88px deep and the stone
+  85px tall, so the sand path the whole composition is built around was
+  entirely behind it. Substrate deepened (back edge 386 → 362px), stone
+  shrunk and lowered, path widened so sand shows either side of it.
+- **Corydoras and shrimp were invisible** — deep animals drew behind the
+  substrate layer. Bottom-dwellers and percher now always draw in front of it.
+- **`npm run stall-test` failed after the cadence change, and the failure was
+  the test's, not the transport's.** Two of its checks sampled state at fixed
+  instants that only landed inside the injected 4s/20s wedges because the old
+  worker's first push waited for its fixed 1s timer. The new cadence pushes
+  the first frame at once (~25ms), so the wedges moved ~1s earlier. Worse, the
+  respawn check's "replacement" worker had inherited the fault-injection env
+  and was itself scheduled to wedge — it had only ever passed by timing luck.
+  Fixed by polling for `STALLED` across the window and clearing the injection
+  env after the first worker captures it. Confirmed against the starting
+  commit first (passes there), then **4/4 clean runs** after. Same assertions;
+  nothing skipped or loosened.
+- A `Promise.race` timeout in `render.js` left an un-cleared timer that would
+  have rejected an orphaned promise after every successful capture — four
+  unhandled rejections a second, and an unhandled rejection kills Node. Found
+  re-reading the diff, before the first run.
+
+### Known unknowns (2026-10-08)
+- **Timed "container" blocks on the work calendar will keep the tank away.**
+  The roadmap rule is "event in progress → agenda", applied as written. Real
+  calendars carry long timed blocks — the 2026-08-18 notes name "Ricky GTD",
+  a 9:30am–4:50pm availability block — and while one is live, the tank never
+  shows. If that is most of the working day, the tank becomes an evenings-and-
+  weekends feature. Not guessed at: it is a rule change, and the agenda's own
+  history (focus.js) says rules derived from imagined cases fail. **Confirm
+  against the real calendar**, then decide: mark such blocks "Show as: Free"
+  (already honoured), or a duration cap on what counts.
+- Whether the GPU flags work in headless on Windows. If the renderer string
+  says SwiftShader, the tank still runs (measured above on SwiftShader), just
+  with more CPU.
+- How many animals the real machine can carry. `MAX_ANIMALS = 30` was chosen
+  against SwiftShader here; the roadmap wanted it set by a measured frame
+  budget on Ricky's machine.
+- Whether the composition reads as an aquascape **at three feet on 6.86"** —
+  everything above was judged on a monitor.
+
 ## Decisions worth not relitigating
 
 Recorded here so they survive a cold start. Full reasoning lives in `CLAUDE.md`.

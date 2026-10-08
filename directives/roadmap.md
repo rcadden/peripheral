@@ -949,7 +949,18 @@ supervised thing is running.* Nobody checked what the watchdog says while the
 attached, `down` is the only state reachable — which is enough to build
 against and not enough to prove the `ok` path still reports correctly.
 
-## Sprint 9 — Fish tank idle mode — **NOT STARTED, planned 2026-10-07**
+## Sprint 9 — Fish tank idle mode — ~~NOT STARTED, planned 2026-10-07~~ **BUILT 2026-10-08 (overnight), NOT YET SEEN ON THE GLASS**
+
+> **Status, 2026-10-08.** Built end to end in one overnight session from this
+> plan, after Ricky answered the open questions (cadence **4 fps**, **on by
+> default** with an off switch, stone shows **tomorrow's first event**, tank
+> **always** overnight). **The gate below was not run first** — the build ran
+> in a cloud container with no panel, Windows or GPU, and Ricky asked for the
+> build regardless. So the gate's job changes from "stop before building" to
+> "measure now, and back off if it fails": `npm run fps-test` is the tool, and
+> the 4 fps ceiling in `src/transport/cadence.js` is the guard. Verified by
+> rendering, a dry-run daemon and 187 tests — see CHANGELOG 2026-10-08 for
+> exactly what was and was not verified, by tier.
 
 Planned in conversation, not in a build session. During free time the panel
 shows a realistic aquarium, generated entirely in code; the agenda takes over
@@ -983,25 +994,38 @@ screenshots to reading frames off the page's own canvas, that is a change to
 
 ### The gate — spike first, stop if it fails
 
-- [ ] **Measure the transport's ceiling.** Push a synthetic animated sequence
+- [~] **Measure the transport's ceiling.** *Tool built 2026-10-08 —
+      `npm run fps-test` (steps 2/4/5/10/15 fps, 20s each, prints achieved
+      rate, push p95/worst, failures, late pushes). **Not yet run on the
+      panel.*** Push a synthetic animated sequence
       (`npm run`-able, guarded like `idle-test`) at stepped rates — 2, 5, 10,
       15 fps — and record sustained throughput, `worstPush`, and whether the
       glass flickers. Note: `RENDER_INTERVAL_MS` floors at 250ms today, so the
-      render side caps at 4 fps before the transport is even asked.
+      render side caps at 4 fps before the transport is even asked. *(Still
+      true, deliberately: the render loop now ticks at that floor and the
+      transport enforces the same 4 fps ceiling.)*
 - [ ] **Measure it under load** (Teams call + a build) — the same standing-watch
       item, now load-bearing.
-- [ ] **Confirm WebGL is on the GPU.** Headless Chromium can fall back to
+- [~] **Confirm WebGL is on the GPU.** *2026-10-08: ANGLE/D3D11 flags added
+      on Windows in `render.js`, and the tank logs `[tank] webgl renderer: …`
+      to `daemon.log` on every load — read that line. Unconfirmed. Measured
+      fallback: on SwiftShader a tank frame captures in ~120–250ms, so
+      software GL is slower, not broken.* Headless Chromium can fall back to
       SwiftShader silently. Launch with ANGLE/D3D11 flags and check the
       renderer string reports Intel Iris Xe. If headless won't take the GPU,
       a hidden headful window.
-- [ ] **`NEEDS RICKY`: decide the cadence against the reliability risk.** The
+- [x] **`NEEDS RICKY`: decide the cadence against the reliability risk.**
+      **Decided 2026-10-08: 4 fps**, with slow drifting motion designed for
+      it (tail beats under 1.5 Hz). Settable 1–4 at `/settings/palette/`. The
       measured ceiling says what is possible; it does not say what is wise on
       this panel. Options include a low animated rate (e.g. 4–6 fps with slow,
       drifting motion designed for it), or animating only some of the time.
       This decision sets the motion budget for everything below.
 - [ ] **Water lighting alone, on the glass.** Second gate: if the spike plus
       the lighting do not look convincing *on the panel* — not in a browser —
-      stop here.
+      stop here. *(2026-10-08: superseded in practice — the whole tank was
+      built, so this becomes "the whole tank, on the glass". If it does not
+      convince, the off switch is at `/settings/palette/` and costs nothing.)*
 
 ### Mode rule
 
@@ -1018,11 +1042,20 @@ each render tick.
   now."
 - Hard cut at T-lead for v1.
 
-- [ ] `resolveMode` with fixture tests: back-to-back, all-day only, empty day,
+- [x] `resolveMode` with fixture tests: back-to-back, all-day only, empty day,
       event in progress, 9- vs 11-minute gap, `workingLocation` noise.
-- [ ] `leadMinutes` in `display.json` via `DisplaySettingsStore`, a field at
+      *(2026-10-08, `web/panes/tank/mode.js`, `test/mode.test.js` — plus no
+      calendar state at all → agenda, free events, unclaimed personal events,
+      the production-meeting override.)*
+- [x] `leadMinutes` in `display.json` via `DisplaySettingsStore`, a field at
       `/settings/palette/`, applied by the existing file watch without a
-      restart — the Sprint 7 pattern.
+      restart — the Sprint 7 pattern. *(2026-10-08, with `enabled` and `fps`
+      beside it; the no-restart path measured in a dry-run daemon.)*
+- [ ] **Container blocks.** *Added 2026-10-08.* A long timed block on the
+      work calendar ("Ricky GTD", 9:30–4:50) counts as "event in progress"
+      and keeps the tank away all day. Check against the real calendar
+      before changing the rule — options are "Show as: Free" on such blocks
+      (already honoured) or a duration cap.
 
 ### Visual direction
 
@@ -1094,11 +1127,12 @@ a Future Exploration for the agenda; the stone is a natural home for it.
 
 ### Open questions for Ricky
 
-- [ ] The cadence decision above — the one that matters.
-- [ ] Overnight and weekends: tank always (recommended — the sunset-driven
+- [x] The cadence decision above — the one that matters. **4 fps** (2026-10-08).
+- [x] Overnight and weekends: tank always (recommended — the sunset-driven
       light bar already makes a natural night mode), or blank/extra-dim
-      outside an hour range.
-- [ ] What the stone shows after the last event of the day.
+      outside an hour range. **Tank always** (2026-10-08).
+- [x] What the stone shows after the last event of the day. **Tomorrow's
+      first event** (2026-10-08); `ALL CLEAR` if there is none.
 
 ### Risks
 
@@ -1112,6 +1146,10 @@ a Future Exploration for the agenda; the stone is a natural home for it.
 
 ## Future Explorations
 - **Tomorrow's first event when today is done — moved here 2026-08-20** from
+  *(2026-10-08: half-done — the fish tank's slate stone shows it, and
+  `state.tomorrow` now exists, fetched in the same request as today. The
+  agenda pane itself still says "Nothing left today"; using `state.tomorrow`
+  there is now a small pane change, not a data change.)*
   the shelved Sprint 4. Doesn't need the multi-pane system or cycling: it's a
   change to what the existing agenda pane shows at 5pm ("Nothing left today"
   is true and unhelpful), not a new pane. Genuinely buildable any session,

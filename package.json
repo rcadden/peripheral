@@ -30,7 +30,9 @@
     "watchdog:test": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/startup.ps1 -Action watchdog-run",
     "send": "node --env-file-if-exists=.env src/transport/send.js",
     "idle-test": "node --env-file-if-exists=.env src/transport/idle-test.js",
-    "stall-test": "node src/transport/stall-test.js"
+    "stall-test": "node src/transport/stall-test.js",
+    "_comment_fps_test": "Sprint 9 gate: pushes a synthetic animated sequence to the REAL panel at stepped rates and measures what the transport sustains. Bypasses the daemon's 4 fps ceiling on purpose. Stop the daemon first (startup:uninstall). The panel WILL animate.",
+    "fps-test": "node --env-file-if-exists=.env src/transport/fps-test.js"
   },
   "optionalDependencies": {
     "node-hid": "^3.4.0",

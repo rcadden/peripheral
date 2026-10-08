@@ -63,7 +63,9 @@ import { NwsProvider } from './sources/weather.js';
 import { StateCache } from './cache.js';
 import { WeatherCache } from './weather-cache.js';
 import { WeatherLocationStore } from './weather-location.js';
-import { DisplaySettingsStore, resolveRotation } from './display-settings.js';
+import { DisplaySettingsStore, resolveRotation, resolveTank } from './display-settings.js';
+import { resolveMode } from '../web/panes/tank/mode.js';
+import { DEFAULT_LOCATION } from '../web/panes/tank/sky.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 /* What renderer.goto() reloads from — see watchPaneSource() below. */
@@ -71,7 +73,13 @@ const WEB_DIR = path.resolve(__dirname, '..', 'web');
 
 const SOURCE_INTERVAL_MS = 60_000;
 const FPS = Number(process.env.PERIPHERAL_FPS ?? 1);
-const RENDER_INTERVAL_MS = Math.max(250, Math.round(1000 / FPS));
+/** The floor on any capture interval — 4 fps. See cadence.js MAX_FPS. */
+const RENDER_FLOOR_MS = 250;
+const RENDER_INTERVAL_MS = Math.max(RENDER_FLOOR_MS, Math.round(1000 / FPS));
+/* The render loop ticks at the floor and decides per tick whether a capture
+ * is due — the agenda every RENDER_INTERVAL_MS as before, the fish tank every
+ * 1000/fps (Sprint 9). One timer, two cadences, no re-arming. */
+const RENDER_TICK_MS = RENDER_FLOOR_MS;
 
 
 /* Stale after roughly five missed refreshes — long enough to ride out a Wi-Fi
@@ -113,6 +121,23 @@ const displaySettingsStore = new DisplaySettingsStore();
 let rotation = 0;
 /** Server origin, kept so the pane URL can be rebuilt when rotation changes. */
 let baseUrl = null;
+
+/* ── Fish tank idle mode (Sprint 9) ────────────────────────────────────────
+ * During free time the glass shows web/panes/tank/; the agenda takes it back
+ * during events and for leadMinutes before the next. `mode` is what the
+ * renderer is pointed at right now; resolveMode() (pure, tested) decides what
+ * it should be, every render tick. Settings come from display.json via the
+ * same file watch as rotation, so toggling the tank needs no restart. */
+/** @type {'agenda'|'tank'} */
+let mode = 'agenda';
+let tankSettings = resolveTank(null);
+/* If the tank page reports it cannot run (no WebGL), stay on the agenda
+ * until the settings change or the day rolls over, rather than retrying a
+ * broken page every tick. */
+let tankBrokenUntil = 0;
+/** Lat/lon for the tank's sunrise/sunset light; the saved weather location's
+ * when there is one. Served in /api/state. */
+let location = { ...DEFAULT_LOCATION };
 /* Reassigned, not mutated in place — a picker-saved location becomes a whole
  * new NwsProvider rather than patching fields on the running one, so a
  * fetch already in flight against the OLD grid can't be half-overwritten
@@ -134,7 +159,7 @@ let providers = [];
  */
 function publishState() {
   if (!lastGood) return;
-  setState({ ...lastGood, stale: calendarStale || lastGood.stale, weather: lastGoodWeather });
+  setState({ ...lastGood, stale: calendarStale || lastGood.stale, weather: lastGoodWeather, location });
 }
 
 /** The frame the push loop ships. Never null once the first capture lands. */
@@ -243,6 +268,9 @@ async function refreshState() {
 async function applyLocationIfChanged() {
   const saved = await weatherLocationStore.load();
   if (!saved) return;
+  if (Number.isFinite(saved.lat) && Number.isFinite(saved.lon)) {
+    location = { lat: saved.lat, lon: saved.lon };
+  }
   const same = saved.gridId === weatherProvider.gridId
     && saved.gridX === weatherProvider.gridX
     && saved.gridY === weatherProvider.gridY
@@ -311,6 +339,61 @@ async function openRenderer(url) {
   return rendererOpen;
 }
 
+/** When the last capture was attempted, for the per-mode cadence. */
+let lastCaptureAt = 0;
+
+/** What should be on the glass right now. Pure decision, see mode.js. */
+function desiredMode(now = new Date()) {
+  if (!tankSettings.enabled || Date.now() < tankBrokenUntil) return 'agenda';
+  return resolveMode(now, lastGood ? lastGood.events : null, tankSettings.leadMinutes);
+}
+
+function captureIntervalMs() {
+  return mode === 'tank'
+    ? Math.max(RENDER_FLOOR_MS, Math.round(1000 / tankSettings.fps))
+    : RENDER_INTERVAL_MS;
+}
+
+/** Tell the transport how soon a new frame may follow the last push. */
+function applyCadence() {
+  panel?.setCadence(mode === 'tank' ? captureIntervalMs() : KEEPALIVE_INTERVAL_MS);
+}
+
+/**
+ * Point the renderer at the other pane. Called from inside renderTick with
+ * `rendering` already held, so no capture can interleave with the navigation.
+ * The transport keeps re-pushing the previous frame throughout, so the panel
+ * never sees a gap — it sees the agenda, then the tank.
+ */
+async function switchMode(next) {
+  const prev = mode;
+  mode = next;
+  paneUrl = paneUrlFor(rotation);
+  applyCadence();
+  const nextEvent = lastGood?.events?.find((e) => !e.allDay && new Date(e.start) > new Date());
+  console.log(`[daemon] mode: ${prev} -> ${next}` + (nextEvent
+    ? ` (next event ${new Date(nextEvent.start).toLocaleTimeString()})` : ' (nothing left today)'));
+  if (!rendererOpen) return;
+  try {
+    await renderer.goto(paneUrl);
+  } catch (err) {
+    console.error(`[daemon] could not load the ${next} pane: ${err.message.split('\n')[0]}`);
+    if (next === 'tank') {
+      // Never leave a broken tank on the glass: back to the agenda, and do
+      // not try again until tomorrow or until the settings change.
+      const tomorrow = new Date(); tomorrow.setHours(24, 0, 0, 0);
+      tankBrokenUntil = tomorrow.getTime();
+      console.error('[daemon] fish tank disabled until midnight — staying on the agenda');
+      mode = 'agenda';
+      paneUrl = paneUrlFor(rotation);
+      applyCadence();
+      try { await renderer.goto(paneUrl); } catch (e) {
+        console.error(`[daemon] agenda reload failed too: ${e.message.split('\n')[0]}`);
+      }
+    }
+  }
+}
+
 /** Capture a frame. Never throws; a failed capture just leaves the old frame. */
 async function renderTick() {
   if (rendering || !renderer) return;
@@ -325,6 +408,16 @@ async function renderTick() {
     return;
   }
 
+  const want = desiredMode();
+  if (want !== mode) {
+    rendering = true;
+    try { await switchMode(want); } finally { rendering = false; }
+    lastCaptureAt = 0; // capture the new pane straight away
+  }
+
+  if (Date.now() - lastCaptureAt < captureIntervalMs() - 20) return;
+  lastCaptureAt = Date.now();
+
   rendering = true;
   try {
     const jpeg = await renderer.capture();
@@ -335,6 +428,16 @@ async function renderTick() {
       // re-pushes this frame on its own cadence until a newer one arrives.
       panel?.setFrame(jpeg);
     } else if (renderer.consecutiveFailures >= RENDERER_REOPEN_AFTER) {
+      /* If it is the tank that keeps failing to capture — a GPU path that
+       * loads but cannot keep up, say — rebuilding Chromium and landing back
+       * on the same tank would loop forever with a frozen frame on the glass.
+       * Give up on the tank for the day; the next tick switches to the agenda
+       * and the rebuild below starts it fresh. */
+      if (mode === 'tank') {
+        const tomorrow = new Date(); tomorrow.setHours(24, 0, 0, 0);
+        tankBrokenUntil = tomorrow.getTime();
+        console.error('[daemon] fish tank kept failing to capture — disabled until midnight, back to the agenda');
+      }
       console.warn(`[daemon] renderer failed ${renderer.consecutiveFailures}x — rebuilding`);
       try {
         await renderer.reopen();
@@ -433,7 +536,12 @@ async function reloadPaneWithRetry(reason, attemptsLeft = 6) {
  * exactly the same source — see the [data-rotate] rule in agenda.css.
  */
 function paneUrlFor(rotate) {
-  return `${baseUrl}/panes/agenda/${rotate ? `?rotate=${rotate}` : ''}`;
+  const q = new URLSearchParams();
+  if (rotate) q.set('rotate', String(rotate));
+  // The tank renders one frame per capture at this rate (see tank.js).
+  if (mode === 'tank') q.set('fps', String(tankSettings.fps));
+  const qs = q.toString();
+  return `${baseUrl}/panes/${mode}/${qs ? `?${qs}` : ''}`;
 }
 
 /**
@@ -450,8 +558,27 @@ function paneUrlFor(rotate) {
  *   yet; main() opens it on the URL this sets.
  */
 async function applyRotationIfChanged({ initial = false } = {}) {
-  const { rotate, source } = resolveRotation(await displaySettingsStore.load());
-  if (!initial && rotate === rotation) return;
+  const saved = await displaySettingsStore.load();
+  const { rotate, source } = resolveRotation(saved);
+
+  /* Fish tank settings ride the same file (Sprint 9). A change to them
+   * needs no reload of its own: enabled/leadMinutes are read by
+   * desiredMode() on the next render tick, which switches panes if the
+   * answer changed; fps changes the tank URL and the transport cadence. */
+  const nextTank = resolveTank(saved);
+  const tankChanged = JSON.stringify(nextTank) !== JSON.stringify(tankSettings);
+  const fpsChanged = nextTank.fps !== tankSettings.fps;
+  tankSettings = nextTank;
+  if (tankChanged) tankBrokenUntil = 0; // a settings change is a fresh try
+  if (initial || tankChanged) {
+    console.log(`[daemon] fish tank: ${tankSettings.enabled ? 'on' : 'off'}, `
+      + `agenda from ${tankSettings.leadMinutes} min before an event, ${tankSettings.fps} fps`);
+  }
+
+  if (!initial && rotate === rotation && !(fpsChanged && mode === 'tank')) {
+    if (tankChanged) applyCadence();
+    return;
+  }
 
   rotation = rotate;
   paneUrl = paneUrlFor(rotate);
@@ -462,8 +589,10 @@ async function applyRotationIfChanged({ initial = false } = {}) {
     return;
   }
 
-  console.log(`[daemon] display: rotation changed to ${rotate} degrees (from ${source}) — reloading pane`);
-  await reloadPaneWithRetry(`rotation ${rotate}`);
+  applyCadence();
+  console.log(`[daemon] display: rotation ${rotate} degrees (from ${source}), `
+    + `tank ${tankSettings.fps} fps — reloading pane`);
+  await reloadPaneWithRetry(`display settings`);
 }
 
 /**
@@ -597,15 +726,16 @@ async function main() {
   // real to ship, rather than leaving the panel on its logo for a whole tick.
   await renderTick();
 
-  setInterval(renderTick, RENDER_INTERVAL_MS);
+  setInterval(renderTick, RENDER_TICK_MS);
 
   watchPaneSource();
   watchWeatherLocation();
   watchDisplaySettings();
 
-  console.log(`[daemon] running — render every ${RENDER_INTERVAL_MS}ms on this ` +
-              `thread, push every ${KEEPALIVE_INTERVAL_MS}ms on the transport ` +
-              `thread (genuinely independent)`);
+  console.log(`[daemon] running — agenda renders every ${RENDER_INTERVAL_MS}ms, ` +
+              `the fish tank every ${Math.round(1000 / tankSettings.fps)}ms, on this thread; ` +
+              `the transport thread pushes new frames as they arrive and re-pushes ` +
+              `every ${KEEPALIVE_INTERVAL_MS}ms regardless (genuinely independent)`);
 
   /* Heartbeat.
    *
@@ -634,7 +764,7 @@ async function main() {
                 `frameAge=${age === null ? 'none' : age + 's'} ` +
                 `worstPush=${worstPush}ms loopLag=${lag}ms ` +
                 `${slowRun ? `slowRun=${slowRun} ` : ''}` +
-                `panel=${panel.state} ` +
+                `panel=${panel.state} mode=${mode} ` +
                 `renderer=${renderer.healthy ? 'ok' : 'down'} ` +
                 `weather=${weatherState}` +
                 `${panel.respawns ? ` respawns=${panel.respawns}` : ''}`);

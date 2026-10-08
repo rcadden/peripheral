@@ -111,6 +111,122 @@ export function resolveRotation(saved) {
   return { rotate: 0, source: 'default' };
 }
 
+/* ── Fish tank idle mode (Sprint 9, 2026-10-08) ──────────────────────────
+ * During free time the panel shows a procedurally generated aquarium; the
+ * agenda takes over during events and for `leadMinutes` before the next one
+ * (see web/panes/tank/mode.js). Three settings, all applied by the existing
+ * display.json file watch without a daemon restart — the Sprint 7 pattern.
+ *
+ *   enabled      on by default (Ricky, 2026-10-08: "On, with an off switch")
+ *   leadMinutes  how long before an event the agenda takes back the glass
+ *   fps          the tank's push rate. 4 by default — Ricky's cadence call
+ *                against the panel's reliability record, 2026-10-08. Capped
+ *                at 4 here AND in the transport (cadence.js MAX_FPS): the
+ *                render loop floors at 250ms, so a higher value would be a
+ *                promise the daemon cannot keep.
+ *
+ * No env var outranks or defaults these. Rotation has PERIPHERAL_ROTATE for
+ * unattended provisioning; nothing about the tank needs to be set before a
+ * human can open a browser, and every extra precedence layer is one more way
+ * for a control to look like it did nothing.
+ */
+
+/** @typedef {{enabled: boolean, leadMinutes: number, fps: number}} TankSettings */
+
+export const TANK_DEFAULTS = Object.freeze({ enabled: true, leadMinutes: 10, fps: 4 });
+export const TANK_FPS_OPTIONS = [1, 2, 3, 4];
+export const TANK_LEAD_RANGE = Object.freeze({ min: 1, max: 60 });
+
+/** A boolean, from JSON or a form control. Absence and junk are null. */
+function parseBool(v) {
+  if (v === true || v === false) return v;
+  if (v === 'true') return true;
+  if (v === 'false') return false;
+  return null;
+}
+
+/** An integer in [min, max], from JSON or a form control — or null. */
+function parseIntIn(v, min, max) {
+  // Same trap as parseRotation: Number('') is 0. Reject the absence first.
+  if (v === null || v === undefined) return null;
+  if (typeof v === 'string' && v.trim() === '') return null;
+  const n = typeof v === 'string' ? Number(v.trim()) : v;
+  if (typeof n !== 'number' || !Number.isInteger(n)) return null;
+  return n >= min && n <= max ? n : null;
+}
+
+/**
+ * Validate each tank field on its own; return only the valid ones. Used on
+ * LOAD, where a bad field is warned about and dropped (falling back to its
+ * default) rather than discarding the whole file.
+ *
+ * @param {unknown} raw
+ * @returns {Partial<TankSettings>|null}
+ */
+export function parseTank(raw) {
+  if (typeof raw !== 'object' || raw === null) return null;
+  const out = {};
+  if (raw.enabled !== undefined) {
+    const v = parseBool(raw.enabled);
+    if (v === null) console.warn(`[display] ignoring saved tank.enabled=${raw.enabled}`);
+    else out.enabled = v;
+  }
+  if (raw.leadMinutes !== undefined) {
+    const v = parseIntIn(raw.leadMinutes, TANK_LEAD_RANGE.min, TANK_LEAD_RANGE.max);
+    if (v === null) console.warn(`[display] ignoring saved tank.leadMinutes=${raw.leadMinutes}`);
+    else out.leadMinutes = v;
+  }
+  if (raw.fps !== undefined) {
+    const v = parseIntIn(raw.fps, 1, 4);
+    if (v === null || !TANK_FPS_OPTIONS.includes(v)) console.warn(`[display] ignoring saved tank.fps=${raw.fps}`);
+    else out.fps = v;
+  }
+  return out;
+}
+
+/**
+ * Validate on SAVE, where a bad field is an error the caller hears about —
+ * a settings form must never report success for a value that was dropped.
+ *
+ * @param {unknown} raw
+ * @returns {Partial<TankSettings>}
+ */
+export function validateTankStrict(raw) {
+  if (typeof raw !== 'object' || raw === null) throw new Error('tank must be an object');
+  const out = {};
+  if (raw.enabled !== undefined) {
+    const v = parseBool(raw.enabled);
+    if (v === null) throw new Error(`tank.enabled must be true or false — got ${raw.enabled}`);
+    out.enabled = v;
+  }
+  if (raw.leadMinutes !== undefined) {
+    const v = parseIntIn(raw.leadMinutes, TANK_LEAD_RANGE.min, TANK_LEAD_RANGE.max);
+    if (v === null) {
+      throw new Error(`tank.leadMinutes must be a whole number ${TANK_LEAD_RANGE.min}–${TANK_LEAD_RANGE.max} — got ${raw.leadMinutes}`);
+    }
+    out.leadMinutes = v;
+  }
+  if (raw.fps !== undefined) {
+    const v = parseIntIn(raw.fps, 1, 4);
+    if (v === null || !TANK_FPS_OPTIONS.includes(v)) {
+      throw new Error(`tank.fps must be one of ${TANK_FPS_OPTIONS.join(', ')} — got ${raw.fps}`);
+    }
+    out.fps = v;
+  }
+  if (!Object.keys(out).length) throw new Error('tank: nothing to save');
+  return out;
+}
+
+/**
+ * Saved values over defaults, field by field.
+ *
+ * @param {null|{tank?: Partial<TankSettings>}} saved
+ * @returns {TankSettings}
+ */
+export function resolveTank(saved) {
+  return { ...TANK_DEFAULTS, ...(saved?.tank ?? {}) };
+}
+
 export class DisplaySettingsStore {
   /** @param {string=} filePath */
   constructor(filePath = defaultDisplayPath()) {
@@ -125,9 +241,33 @@ export class DisplaySettingsStore {
    * worth failing the daemon over. Falling back to the env/default chain
    * leaves the panel upright rather than dead.
    *
-   * @returns {Promise<null|{rotate: 0|180}>}
+   * Each setting is validated on its own (Sprint 9 added `tank` beside
+   * `rotate`): a bad value in one must not throw away a good value in the
+   * other. `tank` is present only when something was saved for it, so a file
+   * written before Sprint 9 loads exactly as it always did.
+   *
+   * @returns {Promise<null|{rotate: 0|180|null, tank?: Partial<TankSettings>}>}
    */
   async load() {
+    const display = await this.#readRaw();
+    if (!display) return null;
+
+    let rotate = null;
+    if (display.rotate !== undefined) {
+      rotate = parseRotation(display.rotate);
+      if (rotate === null) {
+        console.warn(`[display] ignoring saved rotate=${display.rotate} — not 0 or 180`);
+      }
+    }
+    const tank = display.tank !== undefined ? parseTank(display.tank) : null;
+    const hasTank = tank !== null && Object.keys(tank).length > 0;
+
+    if (rotate === null && !hasTank) return null;
+    return hasTank ? { rotate, tank } : { rotate };
+  }
+
+  /** The raw `display` object on disk, or null. Never throws. */
+  async #readRaw() {
     let parsed;
     try {
       parsed = JSON.parse(await fs.readFile(this.filePath, 'utf8'));
@@ -142,36 +282,51 @@ export class DisplaySettingsStore {
       console.warn('[display] ignoring file written by a different version');
       return null;
     }
-
-    const rotate = parseRotation(parsed.display.rotate);
-    if (rotate === null) {
-      console.warn(`[display] ignoring saved rotate=${parsed.display.rotate} — not 0 or 180`);
-      return null;
-    }
-    return { rotate };
+    return parsed.display;
   }
 
   /**
-   * @param {{rotate: number|string}} display
-   * @throws if the rotation is not one this pane can actually render — the
+   * Save a PARTIAL update — `{rotate}`, `{tank: {...}}`, or both — merged
+   * over whatever is already saved, so the orientation control and the fish
+   * tank controls can each save without clobbering the other.
+   *
+   * @param {{rotate?: number|string, tank?: object}} patch
+   * @throws if a supplied value is not one the daemon can actually use — the
    *   validation lives here, not only in the HTTP handler, so nothing can
    *   persist a value the daemon would then have to ignore at boot.
    */
-  async save(display) {
-    const rotate = parseRotation(display?.rotate);
-    if (rotate === null) {
-      throw new Error(`rotate must be one of ${ROTATIONS.join(', ')} — got ${display?.rotate}`);
+  async save(patch) {
+    const hasRotate = patch?.rotate !== undefined;
+    const hasTank = patch?.tank !== undefined;
+    if (!hasRotate && !hasTank) {
+      throw new Error(`rotate must be one of ${ROTATIONS.join(', ')} — got ${patch?.rotate}`);
+    }
+
+    const next = {};
+    const current = await this.load();
+    if (current?.rotate !== null && current?.rotate !== undefined) next.rotate = current.rotate;
+    if (current?.tank) next.tank = { ...current.tank };
+
+    if (hasRotate) {
+      const rotate = parseRotation(patch.rotate);
+      if (rotate === null) {
+        throw new Error(`rotate must be one of ${ROTATIONS.join(', ')} — got ${patch.rotate}`);
+      }
+      next.rotate = rotate;
+    }
+    if (hasTank) {
+      next.tank = { ...next.tank, ...validateTankStrict(patch.tank) };
     }
 
     await fs.mkdir(path.dirname(this.filePath), { recursive: true });
     const tmp = `${this.filePath}.${process.pid}.tmp`;
     await fs.writeFile(tmp, JSON.stringify({
       version: DISPLAY_VERSION,
-      display: { rotate },
+      display: next,
     }, null, 2), { mode: 0o600 });
     // Rename over the old file, so a crash mid-write cannot leave a truncated
     // settings file the next boot would have to distrust.
     await fs.rename(tmp, this.filePath);
-    return { rotate };
+    return next;
   }
 }

@@ -34,6 +34,24 @@ export const CAPTURE_TIMEOUT_MS = 2000;
 /** JPEG quality. 92 is visually lossless at this size; ~40-60KB per frame. */
 const JPEG_QUALITY = 92;
 
+/** How long a pane may take to declare itself ready after load (see #goto). */
+const READY_TIMEOUT_MS = 15_000;
+
+/**
+ * GPU flags, Windows only (Sprint 9). The fish tank is WebGL, and headless
+ * Chromium falls back to SwiftShader — software GL — silently. ANGLE on D3D11
+ * is the path to the Iris Xe. Whether headless actually takes it is the
+ * roadmap's open gate item: the tank logs its renderer string on every load
+ * (`[tank] webgl renderer: ...` in daemon.log), and that line is the answer.
+ * Measured in a Linux container on SwiftShader: a tank frame captures in
+ * ~130-180ms, comfortably inside a 250ms (4 fps) budget, so the fallback is
+ * slower but not broken. Off-Windows these flags are omitted rather than
+ * guessed at.
+ */
+const GPU_ARGS = process.platform === 'win32'
+  ? ['--use-angle=d3d11', '--ignore-gpu-blocklist', '--enable-gpu-rasterization']
+  : [];
+
 export class Renderer {
   #browser = null;
   #page = null;
@@ -56,6 +74,7 @@ export class Renderer {
         '--force-color-profile=srgb',
         // No compositor games — this window is never seen by a human.
         '--disable-lcd-text',
+        ...GPU_ARGS,
       ],
     });
 
@@ -71,6 +90,10 @@ export class Renderer {
     });
     this.#page.on('console', (msg) => {
       if (msg.type() === 'error') console.error(`[render] pane console: ${msg.text()}`);
+      // Panes may log their own one-line facts for the daemon log (the tank's
+      // WebGL renderer string, its daily build). Only those, by prefix — a
+      // pane's ordinary chatter stays in the page.
+      else if (msg.type() === 'log' && msg.text().startsWith('[tank]')) console.log(msg.text());
     });
 
     await this.#goto(url);
@@ -86,6 +109,17 @@ export class Renderer {
     // Let fonts settle. A screenshot taken mid-font-swap ships the fallback
     // face to the panel, which at this type size is very visible.
     await this.#page.evaluate(() => document.fonts?.ready);
+    /* A pane that needs time after 'load' (the fish tank bakes its scene)
+     * sets window.__paneReady = false in its <head> and true when its first
+     * frame is drawn. Panes that never set it — the agenda — pass at once.
+     * Generic on purpose: this module still knows nothing about any pane. */
+    await this.#page.waitForFunction(() => window.__paneReady !== false, null,
+      { timeout: READY_TIMEOUT_MS });
+    /* And a pane that cannot work (no WebGL, for the tank) says so, so the
+     * daemon can put something else on the glass rather than push an error
+     * page to a panel nobody is reading logs for. */
+    const failed = await this.#page.evaluate(() => window.__paneFailed || null);
+    if (failed) throw new Error(`pane reported failure: ${failed}`);
   }
 
   /**
@@ -102,6 +136,23 @@ export class Renderer {
       return null;
     }
     try {
+      /* An animated pane draws exactly one frame per capture rather than
+       * running a 60 Hz loop nobody sees (see web/panes/tank/tank.js). Raced
+       * against the same timeout as the screenshot: capture() must settle. */
+      let timer;
+      try {
+        await Promise.race([
+          this.#page.evaluate(() => window.__beforeCapture?.()),
+          new Promise((_, reject) => {
+            timer = setTimeout(() => reject(new Error(
+              `__beforeCapture exceeded ${CAPTURE_TIMEOUT_MS}ms`)), CAPTURE_TIMEOUT_MS);
+          }),
+        ]);
+      } finally {
+        // Always cleared: a timer left to fire after a win would reject an
+        // orphaned promise, and an unhandled rejection kills the daemon.
+        clearTimeout(timer);
+      }
       const shot = await this.#page.screenshot({
         type: 'jpeg',
         quality: JPEG_QUALITY,
@@ -120,7 +171,8 @@ export class Renderer {
     }
   }
 
-  /** Point the same page at a different pane, for cycling. */
+  /** Point the same page at a different pane — a live edit, a rotation, or
+   * (Sprint 9) the switch between the agenda and the fish tank. */
   async goto(url) {
     if (!this.healthy) throw new Error('renderer not open');
     await this.#goto(url);

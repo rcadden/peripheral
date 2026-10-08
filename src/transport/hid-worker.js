@@ -50,6 +50,7 @@
 
 import { parentPort, workerData } from 'node:worker_threads';
 import { PanelTransport, KEEPALIVE_INTERVAL_MS, IDLE_TIMEOUT_MS } from './hid.js';
+import { pushDue, clampGap } from './cadence.js';
 
 /**
  * A push slower than this means the endpoint is not draining properly. It is
@@ -103,6 +104,16 @@ let pushing = false;
 let reconnecting = false;
 let stopped = false;
 let lastPushMs = 0;
+
+/* ── Cadence (Sprint 9) ───────────────────────────────────────────────────
+ * The main thread says how soon a NEW frame may follow the last push: the
+ * keepalive interval for the agenda (identical to the old fixed 1s timer), a
+ * quarter second while the fish tank animates. See cadence.js for the rule
+ * and the hard ceiling. This thread still owns the timer — the decoupling
+ * that the 2026-08-18 redesign exists for is unchanged. */
+let minGapMs = KEEPALIVE_INTERVAL_MS;
+let lastPushAt = 0;
+let lastPushedSeq = -1;
 
 const post = (msg) => parentPort.postMessage(msg);
 const log = (level, message) => post({ type: 'log', level, message });
@@ -164,10 +175,15 @@ function scheduleReconnect() {
 
 async function pushTick() {
   if (stopped || pushing || !frame) return;
-  if (!panel.healthy) { scheduleReconnect(); return; }
+  const now = Date.now();
+  if (!pushDue({ now, lastPushAt, hasFrame: frame !== null, frameSeq, lastPushedSeq,
+                 minGapMs, keepaliveMs: KEEPALIVE_INTERVAL_MS })) return;
+  if (!panel.healthy) { lastPushAt = now; scheduleReconnect(); return; }
 
   pushing = true;
-  const started = Date.now();
+  const started = now;
+  lastPushAt = now;
+  lastPushedSeq = frameSeq;
   try {
     const ok = await panel.push(frame);
     /* Fault injection: stall INSIDE the push, exactly where a real one happens.
@@ -219,6 +235,10 @@ parentPort.on('message', (msg) => {
     // Buffer.from(view.buffer, ...) wraps without copying again.
     frame = Buffer.from(msg.jpeg.buffer, msg.jpeg.byteOffset, msg.jpeg.byteLength);
     frameSeq = msg.seq;
+  } else if (msg?.type === 'cadence') {
+    const next = clampGap(msg.minGapMs, KEEPALIVE_INTERVAL_MS);
+    if (next !== minGapMs) log('info', `push cadence: new frames up to every ${next}ms`);
+    minGapMs = next;
   } else if (msg?.type === 'close') {
     stopped = true;
     void panel.close().then(() => post({ type: 'closed' }));
@@ -227,8 +247,13 @@ parentPort.on('message', (msg) => {
 
 const interval = Number(workerData?.intervalMs ?? KEEPALIVE_INTERVAL_MS);
 
+/* The tick is a cheap check, not a push — pushDue() decides. 25ms keeps a
+ * 250ms tank cadence within a tenth of its period; at the agenda's cadence it
+ * reproduces the old fixed 1s timer to within one tick. */
+const TICK_MS = 25;
+
 await openPanel();
-setInterval(pushTick, interval);
+setInterval(pushTick, TICK_MS);
 
 /* A heartbeat for the case the push loop has nothing to do. Without it, "no
  * frame yet" and "thread wedged" would look identical from the main thread —

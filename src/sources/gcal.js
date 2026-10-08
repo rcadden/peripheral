@@ -55,11 +55,14 @@
  * @property {number=} attendeeCount
  * @property {'meet'|'zoom'|'teams'|undefined} conference
  * @property {'confirmed'|'tentative'|'cancelled'} status
+ * @property {true=}   transparent     "Show as: Free". Only the tank's mode rule reads it.
  *
  * @typedef {object} PeripheralState
  * @property {string}  generatedAt
  * @property {boolean} stale
  * @property {PeripheralEvent[]} events   today only, sorted by start
+ * @property {PeripheralEvent[]=} tomorrow tomorrow only, sorted — Sprint 9's
+ *   slate stone. Absent on states cached before it existed.
  */
 
 import { OAuthClient } from '../auth/oauth.js';
@@ -89,6 +92,45 @@ export function dayWindow(now = new Date()) {
   const min = new Date(now); min.setHours(0, 0, 0, 0);
   const max = new Date(min); max.setDate(max.getDate() + 1);
   return { timeMin: toLocalIso(min), timeMax: toLocalIso(max) };
+}
+
+/**
+ * Local midnight today → local midnight the day AFTER tomorrow.
+ *
+ * Added for Sprint 9: after the last event of the day, the fish tank's slate
+ * stone shows tomorrow's first event (Ricky, 2026-10-08 — also the old
+ * "tomorrow's first event" Future Exploration). Fetched in the SAME request as
+ * today, by widening the window, rather than as a second query per calendar
+ * per minute: one more day of rows is cheaper than doubling the API calls.
+ * `splitDays()` puts the rows back on their own days, so `events` keeps
+ * meaning exactly "today" for everything that already reads it.
+ */
+export function twoDayWindow(now = new Date()) {
+  const min = new Date(now); min.setHours(0, 0, 0, 0);
+  const max = new Date(min); max.setDate(max.getDate() + 2);
+  return { timeMin: toLocalIso(min), timeMax: toLocalIso(max) };
+}
+
+/** Local midnight at the start of tomorrow. */
+export function tomorrowStart(now = new Date()) {
+  const d = new Date(now); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() + 1);
+  return d;
+}
+
+/**
+ * Split a two-day fetch back into today and tomorrow. Anything STARTING
+ * before local midnight belongs to today — including an event that runs past
+ * midnight, which is exactly what a today-only window returned before, so
+ * `today` is unchanged by the wider fetch.
+ *
+ * @param {PeripheralEvent[]} events
+ * @returns {{today: PeripheralEvent[], tomorrow: PeripheralEvent[]}}
+ */
+export function splitDays(events, now = new Date()) {
+  const cut = tomorrowStart(now).getTime();
+  const today = [], tomorrow = [];
+  for (const e of events) (new Date(e.start).getTime() < cut ? today : tomorrow).push(e);
+  return { today, tomorrow };
 }
 
 /* ── normalisation ───────────────────────────────────────────────────────
@@ -190,6 +232,12 @@ export function normaliseEvent(raw, label) {
     attendeeCount: raw.attendees?.length || undefined,
     conference: detectConference(raw),
     status: raw.status === 'tentative' ? 'tentative' : 'confirmed',
+    // "Show as: Free". Kept in the agenda exactly as before; only the fish
+    // tank's mode rule reads it — a free event is not a reason to take the
+    // glass back from the tank (Sprint 9 roadmap: "free/transparent and
+    // declined events ignored"). Omitted rather than false so older cached
+    // states and fixtures compare equal.
+    ...(raw.transparency === 'transparent' ? { transparent: true } : {}),
   };
 }
 
@@ -313,11 +361,19 @@ export class ApiProvider extends CalendarProvider {
   }
 
   async fetchToday(now = new Date()) {
+    return (await this.fetchDays(now)).today;
+  }
+
+  /**
+   * Today and tomorrow from one request per calendar. See twoDayWindow().
+   * @returns {Promise<{today: PeripheralEvent[], tomorrow: PeripheralEvent[]}>}
+   */
+  async fetchDays(now = new Date()) {
     const map = await this.resolveCalendars();
     const ids = Object.keys(map);
     if (!ids.length) throw new Error(`${this.label}: no calendars to query`);
 
-    const window = dayWindow(now);
+    const window = twoDayWindow(now);
 
     /* One failing calendar must not lose the others. A deleted or unshared
      * calendar 404s forever, and letting that take down the whole account
@@ -341,7 +397,7 @@ export class ApiProvider extends CalendarProvider {
     for (const f of failures) console.warn(`[gcal] ${this.label} calendar failed — ${f}`);
 
     events.sort((a, b) => new Date(a.start) - new Date(b.start));
-    return events;
+    return splitDays(events, now);
   }
 }
 
@@ -385,13 +441,21 @@ export class IcsProvider extends CalendarProvider {
 export async function collect(providers) {
   if (!providers.length) throw new Error('no calendar providers configured');
 
-  const results = await Promise.allSettled(providers.map((p) => p.fetchToday()));
+  /* A provider with fetchDays() also supplies tomorrow (Sprint 9); one with
+   * only fetchToday() — the ICS stub, test doubles — contributes today only,
+   * and `tomorrow` simply comes back shorter. */
+  const results = await Promise.allSettled(providers.map(async (p) => (
+    typeof p.fetchDays === 'function' ? p.fetchDays() : { today: await p.fetchToday(), tomorrow: [] }
+  )));
 
   const events = [];
+  const tomorrow = [];
   const failures = [];
   results.forEach((r, i) => {
-    if (r.status === 'fulfilled') events.push(...r.value);
-    else {
+    if (r.status === 'fulfilled') {
+      events.push(...r.value.today);
+      tomorrow.push(...r.value.tomorrow);
+    } else {
       const msg = r.reason?.message ?? String(r.reason);
       failures.push(`${providers[i].label}: ${msg}`);
       console.error(`[gcal] ${providers[i].label} failed:`, msg);
@@ -403,10 +467,12 @@ export async function collect(providers) {
   }
 
   events.sort((a, b) => new Date(a.start) - new Date(b.start));
+  tomorrow.sort((a, b) => new Date(a.start) - new Date(b.start));
 
   return {
     generatedAt: new Date().toISOString(),
     stale: failures.length > 0,
     events,
+    tomorrow,
   };
 }

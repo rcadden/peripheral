@@ -49,6 +49,15 @@ endpoint can't take the rest of the daemon down with it (see `CHANGELOG.md`,
   concurrent meeting and a longer commitment resolve by which one you're
   actually *in*, not which one is technically bigger. Personal-calendar
   events are demoted unless clearly claimed by name or a matching work block.
+- **A fish tank in free time.** When nothing is on and the next event is more
+  than ten minutes off, the panel shows a planted aquarium generated entirely
+  in code — driftwood, stem plants, a sand path, a school of fish — a new
+  layout every day. The next meeting is carved into a slate stone in the sand;
+  the clock and outdoor temperature are on a stick-on thermometer; the light
+  follows the real sunrise and sunset, and rain falls on the surface when it
+  rains outside. The agenda takes the glass back ten minutes before an event.
+  Animates at 4 fps by default (this panel's reliability record makes that a
+  ceiling); toggle and tune it at `/settings/palette/`.
 
 ## How it works
 
@@ -75,6 +84,10 @@ node src/server.js
 Open <http://127.0.0.1:4780/panes/agenda/> at 1280×480. With no daemon running
 there's no `/api/state`, so the pane falls back to mock events anchored to your
 real clock — the countdown ticks and the layout is honest.
+
+The fish tank is at <http://127.0.0.1:4780/panes/tank/>. Preview flags:
+`?hour=21.5` (light it as 9:30 PM), `?weather=rain`, `?seed=2026-10-09`
+(another day's tank), `?fps=4` (animate at the panel's rate).
 
 ## Setup, if you own the same panel
 

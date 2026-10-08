@@ -108,14 +108,25 @@ async function main() {
     await sleep(1200);
     check('pushing normally before the fault', p.state === 'ok', `state=${p.state}`);
 
+    /* Watch for the stall across the whole window rather than sampling once
+     * at a fixed instant. The single sample used to land inside the block
+     * only because the worker's first push waited for its fixed 1s timer;
+     * since Sprint 9's cadence change the first frame goes out at once, the
+     * block starts ~1s earlier, and a fixed-time sample can miss it. What the
+     * check asserts is unchanged: while the worker is wedged, the proxy says
+     * STALLED. */
     const meter = startLagMeter();
-    await sleep(4500);                       // worker is blocked for 4s in here
+    let seenStalled = null;
+    for (let waited = 0; waited < 4500; waited += 100) {   // worker blocks 4s in here
+      await sleep(100);
+      if (!seenStalled && /STALLED/.test(p.state)) seenStalled = p.state;
+    }
     const worstLag = meter.stop();
 
     check('main thread stayed responsive during the block',
           worstLag < 500, `worst loop lag ${worstLag}ms`);
-    check('the stall was reported, not hidden', /STALLED/.test(p.state),
-          `state=${p.state}`);
+    check('the stall was reported, not hidden', seenStalled !== null,
+          `state=${seenStalled ?? p.state}`);
 
     // It must clear itself once the worker comes back — a transient wedge is a
     // hiccup, not a permanent condition.
@@ -142,6 +153,14 @@ async function main() {
     const p = new PanelProxy();
     check('opened', await p.open() === true);
     p.setFrame(jpeg);
+    /* The first worker captured the fault-injection env when it was spawned.
+     * Clear it now so the REPLACEMENT is healthy. Before this, the respawned
+     * worker inherited the same injection and wedged on its own second push;
+     * the check below passed only because the old fixed 1s push timer put
+     * the sample just before that second wedge. Sprint 9's cadence change
+     * (first frame pushed at once) moved the wedge earlier and exposed it. */
+    delete process.env.PERIPHERAL_DEBUG_BLOCK_AFTER;
+    delete process.env.PERIPHERAL_DEBUG_BLOCK_MS;
 
     const meter = startLagMeter();
     await sleep(12000);                      // past RESPAWN_AFTER_MS (6s)

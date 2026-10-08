@@ -92,8 +92,9 @@ export class StateCache {
   async save(state) {
     // The daemon refreshes once a minute and the agenda changes a few times a
     // day. Comparing events rather than the whole state skips ~1400 writes a
-    // day that differ only in `generatedAt`.
-    const signature = JSON.stringify(state.events ?? []);
+    // day that differ only in `generatedAt`. `tomorrow` (Sprint 9) is part of
+    // the signature too, or a change to tomorrow alone would never persist.
+    const signature = JSON.stringify([state.events ?? [], state.tomorrow ?? []]);
     if (signature === this._lastWritten) return;
 
     try {
