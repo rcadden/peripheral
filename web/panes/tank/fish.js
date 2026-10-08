@@ -112,39 +112,82 @@ function stepSchool(pop, dt) {
   const fish = pop.agents.filter((a) => a.sp.style === 'school');
   if (!fish.length) return;
   const sp = fish[0].sp;
-  // The shared target wanders across the whole tank on a slow noise path.
+  const r = pop.rng;
   const t = pop.t;
-  pop.schoolTarget.x = W / 2 + pop.noise(t * 0.018) * (W / 2 - 180);
-  pop.schoolTarget.y = (sp.band[0] + sp.band[1]) / 2 + pop.noise(t * 0.03 + 50) * (sp.band[1] - sp.band[0]) * 0.35;
+  /* SHOALING, NOT A CURRENT — rebuilt 2026-10-08 after Ricky watched it on
+   * the glass: fish "spawn on the left, swim right, and then fade out. They're
+   * still following a current (which wouldn't exist in a tank) instead of
+   * milling about in the tank."
+   *
+   * History: every fish used to steer toward ONE shared target sliding along
+   * a noise path, with strong alignment, so the school moved as a block that
+   * flowed across the glass — a current. Earlier the same day the target's
+   * range and speed were widened, which made the flow more obvious, not less.
+   *
+   * Now: the school has a HOME that relocates very slowly, and each fish picks
+   * its own waypoint near home every few seconds. Individuals turn, hover and
+   * cross each other; the shoal holds together through weak cohesion, not by
+   * all chasing the same point. */
+  const midY = (sp.band[0] + sp.band[1]) / 2, halfY = (sp.band[1] - sp.band[0]) / 2;
+  pop.schoolTarget.x = W / 2 + pop.noise(t * 0.012) * (W / 2 - 300);
+  pop.schoolTarget.y = midY + pop.noise(t * 0.02 + 50) * halfY * 0.5;
+  const home = pop.schoolTarget;
+
+  /* Neighbourhood scales with body length. It was a fixed 110px while
+   * separation is 0.9 body lengths, so when the fish doubled (2026-10-08) a
+   * neon's personal space (~88px) nearly filled the radius it could see
+   * neighbours in, and the school fell apart across the tank. */
+  const seeR = Math.max(110, sp.length * 2.6);
+  const sep = sp.length * 0.9;
+  // Mean depth, so the school moves toward and away from the glass together.
+  const zMean = fish.reduce((s, a) => s + a.z, 0) / fish.length;
+  const accel = sp.speed[1] * 1.4;
 
   for (const a of fish) {
+    a.vz += (zMean - a.z) * 0.4 * dt;
+
+    a.timer -= dt;
+    if (!a.target || a.timer <= 0) {
+      a.target = {
+        x: clamp(home.x + r.range(-260, 260), X_MIN + 60, X_MAX - 60),
+        y: clamp(home.y + r.range(-halfY * 0.9, halfY * 0.9), sp.band[0] + 15, sp.band[1] - 15),
+      };
+      a.timer = r.range(2, 6);
+    }
+    const tx = a.target.x - a.x, ty = a.target.y - a.y;
+    const td = Math.hypot(tx, ty) || 1;
+    if (td < sp.length * 0.6) a.timer = Math.min(a.timer, r.range(0.3, 1.2)); // arrived: linger briefly
+    a.vx += (tx / td) * accel * dt;
+    a.vy += (ty / td) * accel * 0.7 * dt;
+
     let sx = 0, sy = 0, ax = 0, ay = 0, cx = 0, cy = 0, n = 0;
     for (const b of fish) {
       if (a === b) continue;
       const dx = b.x - a.x, dy = b.y - a.y;
       const d = Math.hypot(dx, dy);
-      if (d > 110) continue;
+      if (d > seeR) continue;
       n++;
       ax += b.vx; ay += b.vy;
       cx += b.x; cy += b.y;
-      const sep = sp.length * 0.9;
       if (d < sep && d > 0.01) { sx -= (dx / d) * (sep - d); sy -= (dy / d) * (sep - d); }
     }
     if (n) {
-      a.vx += ((ax / n) - a.vx) * 0.6 * dt;
-      a.vy += ((ay / n) - a.vy) * 0.6 * dt;
-      a.vx += ((cx / n) - a.x) * 0.18 * dt;
-      a.vy += ((cy / n) - a.y) * 0.18 * dt;
+      // Weak alignment (was 0.6): enough to shoal, not enough to flow as one.
+      a.vx += ((ax / n) - a.vx) * 0.2 * dt;
+      a.vy += ((ay / n) - a.vy) * 0.2 * dt;
+      a.vx += ((cx / n) - a.x) * 0.1 * dt;
+      a.vy += ((cy / n) - a.y) * 0.1 * dt;
     }
     a.vx += sx * 1.6 * dt;
     a.vy += sy * 1.6 * dt;
-    a.vx += (pop.schoolTarget.x - a.x) * 0.05 * dt;
-    a.vy += (pop.schoolTarget.y - a.y) * 0.08 * dt;
     // Individual wobble so the school never looks like one sprite.
     a.vx += pop.noise(t * 0.5 + a.jitter) * 6 * dt;
     a.vy += pop.noise(t * 0.4 + a.jitter + 300) * 5 * dt;
-    a.vy *= 1 - 0.8 * dt; // fish swim level, not up and down
-    limit(a, sp.speed[0], sp.speed[1]);
+    // Water drag, so fish slow and turn rather than coast at full speed.
+    a.vx *= 1 - 0.6 * dt;
+    a.vy *= 1 - 0.8 * dt;
+    // Minimum is a slow hover now, not the cruising floor: shoaling fish idle.
+    limit(a, sp.speed[0] * 0.3, sp.speed[1]);
     bounds(a, dt);
   }
 }
@@ -162,7 +205,7 @@ function stepCruise(pop, a, dt) {
     const dx = a.target.x - a.x, dy = a.target.y - a.y;
     const d = Math.hypot(dx, dy) || 1;
     a.vx += (dx / d) * 6 * dt;
-    a.vy += (dy / d) * 3 * dt;
+    a.vy += (dy / d) * 6 * dt;
     if (d < 20) a.timer = 0;
   } else {
     a.vx *= 1 - 1.2 * dt;
@@ -244,7 +287,13 @@ export function step(pop, dt) {
     // Depth drifts slowly for swimmers, so they pass in front of and behind
     // the wood rather than living on one plane.
     if (a.sp.style === 'school' || a.sp.style === 'cruise') {
-      a.vz += pop.noise(pop.t * 0.07 + a.jitter + 700) * 0.02 * dt;
+      // 0.02 -> 0.06 (2026-10-08): depth barely moved, so the tank read as
+      // flat. A first try at 0.12 with no restoring force pinned most fish at
+      // z 0.05 or 0.95 within a minute, and the back ones vanished behind the
+      // plants. The pull toward the species' home depth keeps the wander real
+      // but bounded; the school also pulls toward its own mean depth above.
+      a.vz += pop.noise(pop.t * 0.07 + a.jitter + 700) * 0.06 * dt;
+      a.vz += (a.sp.depth - a.z) * 0.08 * dt;
       a.vz *= 1 - 0.5 * dt;
       a.z = clamp(a.z + a.vz * dt, 0.05, 0.95);
     }

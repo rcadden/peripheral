@@ -1511,6 +1511,44 @@ last wrong conclusion got built. Left open.
   endpoint was driven with `curl`, the radio and status logic in a real browser.
   Confirm by: clicking it once at `/settings/palette/`.
 
+### Diagnosed — the panel did not survive a Modern Standby resume (2026-10-07)
+
+Ricky: the panel was black/off, plugged in. Diagnosed from logs and Windows
+state, no code touched.
+
+**What was measured:**
+- Daemon alive since 08:46, `/api/health` ok, watchdog `ok` every 5 minutes,
+  heartbeat `panel=down renderer=ok` — the daemon was behaving correctly for a
+  device that was not on the bus.
+- All four `VID_0416&PID_5302` nodes `Present: False`. `LastArrivalDate`
+  2026-10-05 08:35:44, **`LastRemovalDate` 2026-10-07 08:45:21.**
+- System log: **entered Modern Standby 08:45:18, exited 08:45:19.** The panel
+  vanished two seconds after resume.
+- The monitor's hub, both webcams and the USB-C video adapter were present, so
+  the hub itself was alive. Only the panel failed to re-enumerate.
+- Replugging the USB-C fixed it with no software change: `open — PM=128 SUB=1`,
+  `panel reconnected`, `pushed=8 failed=0`, `panel=ok`.
+
+**What is NOT concluded:** the cause. The panel may lose its link on a hub
+power transition during resume, or its USB-C connection may be marginal and
+resume is merely when it showed — the two are not separable from one event.
+Not logged as a hardware death, and not counted toward a cable verdict (the
+cable question stays disputed and untouched, per the failure-log note).
+
+**Sprint 8 gets its second real-world datum:** a fault that only a physical
+replug clears, during which every health signal read `ok`. Still scoped to
+*log, do not act* — restarting the daemon would not have helped here, which is
+the same argument as 2026-08-29.
+
+### Known unknowns (2026-10-07)
+
+- **Does the panel drop on every Modern Standby resume, or was this one-off?**
+  Confirm by: let the machine sleep and wake once with the panel attached, then
+  `Get-PnpDevice -PresentOnly | ? InstanceId -like '*VID_0416&PID_5302*'` — if
+  empty after resume, it is repeatable. Compare against Kernel-Power 507.
+- **Is it the sleep state, or the monitor's hub losing power on resume?** Not
+  separable yet. Disabling sleep (setting `Sleep: Never` on AC) is the cheap
+  experiment: no drops with sleep off implicates resume.
 ### Added — Sprint 9, the fish tank idle mode (2026-10-08, overnight build)
 
 Built overnight from the roadmap's Sprint 9 plan, after ten-or-fewer questions
@@ -1696,14 +1734,165 @@ browser opens, and it animates natively in either.
   history (focus.js) says rules derived from imagined cases fail. **Confirm
   against the real calendar**, then decide: mark such blocks "Show as: Free"
   (already honoured), or a duration cap on what counts.
-- Whether the GPU flags work in headless on Windows. If the renderer string
+- ~~Whether the GPU flags work in headless on Windows. If the renderer string
   says SwiftShader, the tank still runs (measured above on SwiftShader), just
-  with more CPU.
+  with more CPU.~~ **ANSWERED 2026-10-08 (day session): they work.**
+  `ANGLE (Intel, Intel(R) Iris(R) Xe Graphics (0x0000A7A0) Direct3D11 …)`;
+  captures take 18–90ms.
 - How many animals the real machine can carry. `MAX_ANIMALS = 30` was chosen
   against SwiftShader here; the roadmap wanted it set by a measured frame
   budget on Ricky's machine.
 - Whether the composition reads as an aquascape **at three feet on 6.86"** —
-  everything above was judged on a monitor.
+  everything above was judged on a monitor. *(2026-10-08, day session:
+  partly answered — Ricky watched it all morning; the hardscape and plants
+  drew no complaint, the stone did (replaced), the fish behaviour did (open),
+  and floating shadows did (open). See below.)*
+
+### Seen on the glass — the fish tank's first day (2026-10-08, day session)
+
+Ricky pulled the overnight build and watched the tank on the panel through the
+morning. Everything below was iterated live against what he saw. **Tiers, per
+the session-close gate:** *seen* = Ricky reported it from the panel;
+*measured* = a number from a script or the log; *rendered* = a captured frame
+I read; *tested* = `npm test`.
+
+| What | Tier | Result |
+|---|---|---|
+| Tank at 4 fps | seen | "lots of flicker… more of a slideshow than an animation", clarified as **stuttering** |
+| JPEG quality 92 → 80 for the tank | seen | "only slightly better" |
+| fps-test, 6/8/10/12 fps | seen + measured | "10 and 12 definitely look the smoothest", but every rate visibly stepped — "being redrawn continuously in a different position each time" |
+| 10 fps + normal task priority | seen | fish "swimming more smoothly now" |
+| Countdown card (replaced the stone) | seen | "the card looks fine" |
+| Fish 2x, then 3x speed | seen | first "way too small", then "suuuuuuper slow" — both changed; the result not yet judged |
+| Fish behaviour | seen | **not accepted** — "following a current (which wouldn't exist in a tank) instead of milling about"; then "I don't think you fully understand how a fish tank works" |
+| Floating shadows on the grass | seen | **still present** after the caustic change; not tied to stutters |
+| Shrimp | seen | invisible on the glass |
+| Variety | seen | only two fish shapes ever ("we can solve that later") |
+
+### Fixed — the tank stuttered because Task Scheduler runs at below-normal priority (2026-10-08)
+
+**Root cause, measured by elimination — every step a test, not a guess:**
+
+1. **fps-test on the real panel** (daemon stopped, main thread, synthetic
+   151KB frames): 6/8/10 fps achieved exactly, 0 failed, 0 late, avg push
+   50–56ms, **worst 78–94ms**. 12 fps achieved 11.95 with 9 late slots.
+   *(This morning's earlier run, same frames, measured avg 130–142ms and worst
+   423ms at 4 fps — the machine was evidently busier then. Recorded, not
+   explained.)*
+2. **The daemon, minutes later on the same machine:** pushes of 400–1243ms,
+   ~6 fps at a 10 fps cadence. So not the panel and not the frame size.
+3. **Chromium contention ruled out:** fps-test at 10 fps alongside a second
+   process capturing the tank ~9x/s — avg push 49.7ms vs 51.6ms alone.
+4. **Worker thread ruled out:** the identical push loop on the main thread and
+   inside a `Worker` — 60–72ms vs 62–69ms avg, same rate.
+5. **The worker's scheduling, isolated** (real tank frames through
+   `PanelProxy`, no rendering): 8.5 fps, 47ms median push, 110ms median gap —
+   the 25ms tick lands on Windows' 15.6ms timer grid. Costs ~15%, not 3x.
+6. **Launch context — the cause.** The same daemon from a terminal: ~7.8 fps
+   (234–237 pushes/30s), worst push 181–187ms, one hitch in 75s. From the
+   logon task: ~6 fps, worst 354–845ms, ~6 hitches/min. **Task Scheduler's
+   default priority is 7 — below normal for CPU AND I/O** — and
+   `scripts/startup.ps1` never set one.
+
+**Fix:** `-Priority 4` (normal) on the logon task's settings. Verified: the
+task reports `Priority 4`, the running `node.exe` reports `PriorityClass
+Normal`. **After:** ~7.5 fps (217–228 pushes/30s), worst push 454–767ms,
+~2 hitches/min (was 87–109 pushes, worst 815–1252ms, at 4 fps).
+
+### Changed — the tank runs at 10 fps (2026-10-08)
+
+- **Ricky re-decided the cadence after the measurement:** 4 → **10 fps**.
+  `MAX_FPS` in `cadence.js` 4 → 10; `RENDER_FLOOR_MS` in `daemon.js`
+  250 → 100; `TANK_DEFAULTS.fps` 4 → 10; options `[1,2,3,4]` →
+  `[1,2,4,6,8,10]`. The agenda is unaffected (still `RENDER_INTERVAL_MS`).
+  The superseded reasoning is kept, struck, in `display-settings.js`.
+- **Cost, named:** 2.5x the HID writes whenever the tank shows. Whether that
+  shortens the panel's life is not measurable; it is Ricky's call, made with
+  the panel's review record in view.
+- **The daemon reaches ~7.5 fps, not 10** — see the timer-grid finding above.
+
+### Changed — the countdown is an LCD card, not a stone (2026-10-08)
+
+Ricky: the grey slab "doesn't look anything like a stone slab… The data is
+right, the presentation is not." Recommended and built the standalone option
+over "blend it into the tank": the clock badge was already the tank's UI
+language and reads well at three feet. Same housing (`paintHousing`, now
+shared with the clock), same digit colour, bottom-aligned with the clock on
+the front glass (renderOrder 90), 568x90 at x 356. No scene light or caustics
+on it; dims with the clock at night (0.82). The T-20 glow is kept. Names
+`STONE` / `paintStone` kept so nothing downstream changed. **Seen on the
+glass: "the card looks fine."** Night dimming and the glow: written, not seen.
+
+### Changed — fish: bigger, faster, and a third attempt at behaviour (2026-10-08)
+
+- **2x length** (`DISPLAY_SCALE` in `species.js`) — Ricky: "way too small -
+  should be 2x as big."
+- **3x speed** (`SPEED_SCALE`) — "suuuuuuper slow". Doubling length at the same
+  px/s had halved speed in body-lengths, and speeds were set for 4 fps.
+- **The doubling broke schooling, found by measurement:** neighbour radius was
+  a fixed 110px while separation is 0.9 body lengths (~88px for a 2x neon), so
+  the school scattered across the tank. Radius now `max(110, 2.6 lengths)`.
+- **Behaviour, three attempts, none accepted:**
+  1. *Overnight:* one shared target on a noise path + strong alignment →
+     "only really left to right… a small section of a larger tank".
+  2. *Wider target, more depth wander:* depth noise with no restoring force
+     pinned most fish at z 0.05 / 0.95 within a minute; the back half vanished
+     behind the plants. Fixed with a pull to home depth.
+  3. *Per-fish waypoints around a slow home, weak alignment, drag:* measured
+     ~15 reversals/fish/min, 29% mean alignment — and still read on the glass
+     as "a current… instead of milling about".
+  **What this session learned is in Lessons Learned, not here: the model was
+  invented each time.** Deskworlds' riverscape fish
+  (`github.com/chaseleantj/deskworlds`, MIT) models station-keeping, burst-and-
+  coast, recruitment and loose spacing from published behaviour studies. The
+  next unit of work is a written spec from that and Ricky's reference clips.
+- Depth fog on fish 0.42 → 0.25 per unit z (deep fish read as fading out).
+- Swim bands widened: schools ~[130,330] → [85,300], centrepieces [100,280] →
+  [80,310].
+
+### Changed — caustics cut (2026-10-08) — did NOT fix the shadows
+
+Ricky reported "weird floating shadows… most noticeable on the grass along the
+bottom." Rendering with every fish hidden showed dark moving shapes from the
+caustic pattern on the substrate and stone; with caustic gains zeroed they
+went away. Gains cut: substrate 0.6 → 0.2, wood 0.45 → 0.25, mid plants
+0.3 → 0.15, front 0.2 → 0.1. **Ricky still sees the shadows.** 60 consecutive
+renders afterwards, diffed against each pixel's median, show no transient dark
+regions beyond swaying grass edges, with or without fish; Ricky says they do
+not coincide with stutters. **Cause unknown.** Whatever he sees, the renders
+I can capture do not contain it — a photo or video of the glass is the next
+step, not another theory.
+
+### Added — diagnostics (2026-10-08)
+
+- **Hitch log.** Any push ≥ `PERIPHERAL_HITCH_MS` (400ms) logs
+  `[hid] hitch <time> push=… new|keepalive <KB> chunks=… write=…
+  worstChunk=…ms@<idx> sinceLast=… during=[…]`. `hid.js` records per-chunk
+  timing (`lastPushTiming`); the daemon adds what the main thread was doing
+  (`capture-tank`, `calendar-fetch`, `weather-fetch`) during the push.
+  Finding: slow pushes are slow across *all* chunks (~5ms each vs ~0.6ms), not
+  one stalled chunk — contention, not the endpoint pausing.
+- **Push trace**, `PERIPHERAL_PUSH_TRACE=1`: one line per push with duration,
+  gap since the previous push, and frame age. Off by default.
+- **Per-pane JPEG quality**: a pane may set `window.__jpegQuality` (read once
+  per navigation; anything not an integer in 50–100 means the default, so an
+  absent value cannot coerce to 0). The tank sets 80: frames 188KB → ~108KB.
+
+### Known unknowns (2026-10-08, day session)
+
+- **The floating shadows.** Seen on the glass, absent from every render.
+  Confirm by: a phone photo or video of the panel showing one.
+- **Residual hitches**, ~2/min at 0.4–0.8s. Whether they settle after the
+  daemon has been up a while, or track something on the machine. Confirm by:
+  `grep "hitch" daemon.log` over an afternoon and read the `during=` field.
+- **Timer grid.** Whether `TICK_MS` 25 → 10 in `hid-worker.js` lifts the
+  daemon from ~7.5 toward 10 fps. Confirm by: the per-30s `pushed=` delta.
+- **Why this morning's first fps-test was 2.5x slower** (avg 130–142ms) than
+  the afternoon's (50–56ms) with identical frames. Possibly other load on the
+  machine. Not reproduced.
+- **`startup:uninstall` orphans the daemon.** Observed three times today:
+  `Stop-ScheduledTask` ends `hidden.vbs`, and `node src\daemon.js` keeps
+  running with nothing supervising it. Not fixed.
 
 ## Decisions worth not relitigating
 
@@ -1740,6 +1929,7 @@ matter for judging the failure curve.
 | ~~2026-08-19 ~08:41~~ | ~~day 3~~ | **NOT A REAL EVENT — corrected same day.** Panel reported `not enumerating` after a forceful daemon restart; the panel was simply not physically connected this session. No hardware or shutdown-path fault. | N/A — Ricky confirmed via browser preview, panel wasn't plugged in. |
 | ~~2026-08-24 07:47–08:18~~ | ~~day 8~~ | **NOT A PANEL EVENT — logged here only so it is not counted on this curve later.** 31 minutes on the vendor logo, but the panel behaved exactly as designed: the daemon process was gone, and the firmware forgets ~3s after the last frame. A software supervision bug, not hardware. See *"Fixed — nothing was supervising the daemon"* above. | Manual `schtasks /run`, then the supervision fixes shipped the same session. |
 | ~~2026-08-29, through ~12:04~~ | ~~day 13~~ | **NOT A REAL EVENT — corrected same day by Ricky: "I just unplugged the panel cause I took my laptop downstairs and the panel is attached to my external monitor."** The device was absent from Windows PnP because it was physically disconnected. No hardware fault, and **this must not be counted on the failure curve.** Original text kept below per the no-tidying rule: *repeated `ok -> STALLED -> down -> ok` cycles across ~12h (1,142 `down` heartbeats against 15,750 `ok`), then `The device is not connected`, one worker respawn, 1,174 `not enumerating` messages, all four `VID_0416&PID_5302` nodes `Present: False`.* Every one of those observations was accurate. The conclusion drawn from them was not — the daemon behaved correctly throughout for a panel that had been unplugged, which is indistinguishable in the logs from a panel that has died. | N/A — nothing to clear. Plug it back in. |
+| 2026-10-07 08:45:21–~09:40 | day 52 | **Panel dropped off the USB bus at resume from Modern Standby and did not come back.** Windows' `LastRemovalDate` for `USB\VID_0416&PID_5302\USBDISPLAY` is 08:45:21; Kernel-Power logged exit from Modern Standby at 08:45:19. Everything else on the same hub (webcams, USB-C video adapter) re-enumerated normally. Physically plugged in throughout (Ricky confirmed — the 2026-08-29 check was run *first* this time). ~55 min of `panel=down`; `/api/health` and the watchdog read `ok` throughout, as predicted for Sprint 8. **Unclassified: logged, not counted on the failure curve** until it recurs — one resume-correlated drop is a lead, not a pattern. | **Physical replug of the USB-C.** Daemon reconnected on its next 30s retry (`PM=128 SUB=1`, `panel=ok`, no restart). |
 
 Two events in two days was recorded as early on the curve, both consistent
 with the cable — the failure point the reviews name most often. **Arguably a

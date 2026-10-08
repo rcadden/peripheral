@@ -31,7 +31,9 @@ export const VIEWPORT = { width: 1280, height: 480 };
 /** A capture that takes longer than this is abandoned, not awaited. */
 export const CAPTURE_TIMEOUT_MS = 2000;
 
-/** JPEG quality. 92 is visually lossless at this size; ~40-60KB per frame. */
+/** JPEG quality. 92 is visually lossless at this size; ~40-60KB per frame.
+ * A pane may set its own with window.__jpegQuality (read once per #goto) —
+ * the fish tank does, because its detailed frames push unevenly at 92. */
 const JPEG_QUALITY = 92;
 
 /** How long a pane may take to declare itself ready after load (see #goto). */
@@ -56,6 +58,7 @@ export class Renderer {
   #browser = null;
   #page = null;
   #url = null;
+  #quality = JPEG_QUALITY;
   #consecutiveFailures = 0;
 
   get healthy() { return this.#page !== null && !this.#page.isClosed(); }
@@ -120,6 +123,10 @@ export class Renderer {
      * page to a panel nobody is reading logs for. */
     const failed = await this.#page.evaluate(() => window.__paneFailed || null);
     if (failed) throw new Error(`pane reported failure: ${failed}`);
+    // Absence must not coerce to a legal value (Number(null) is 0), so
+    // anything that is not an integer in range means "use the default".
+    const q = await this.#page.evaluate(() => window.__jpegQuality ?? null);
+    this.#quality = Number.isInteger(q) && q >= 50 && q <= 100 ? q : JPEG_QUALITY;
   }
 
   /**
@@ -155,7 +162,7 @@ export class Renderer {
       }
       const shot = await this.#page.screenshot({
         type: 'jpeg',
-        quality: JPEG_QUALITY,
+        quality: this.#quality,
         // Explicit clip: if the pane's CSS ever makes the document taller than
         // the viewport, a default screenshot would silently change size and the
         // panel would receive a frame whose header lies about its geometry.

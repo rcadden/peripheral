@@ -363,6 +363,17 @@ export class PanelProxy {
         fn(`[hid] ${msg.message}`);
         break;
       }
+      case 'hitch': {
+        /* The worker cannot see the main thread, so the daemon may add what it
+         * was doing at the time (rendering, fetching) via onHitch. */
+        const extra = this.onHitch?.(msg) ?? '';
+        const when = new Date(msg.at).toTimeString().slice(0, 8);
+        console.warn(`[hid] hitch ${when} push=${msg.ms}ms ${msg.kind} ` +
+          `${Math.round(msg.bytes / 1024)}KB chunks=${msg.chunks} write=${msg.writeMs}ms ` +
+          `worstChunk=${msg.worstChunkMs}ms@${msg.worstChunkIdx} ` +
+          `sinceLast=${msg.sinceLastPushMs ?? '-'}ms${extra ? ' ' + extra : ''}`);
+        break;
+      }
       default:
         break;
     }

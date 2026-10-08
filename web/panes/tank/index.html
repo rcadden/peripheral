@@ -12,12 +12,18 @@
      __paneReady: the tank bakes its scene for a second or two after load.
      render.js waits for this to flip true before it captures, so the first
      frame pushed after a switch is the tank, not a black canvas. Panes that
-     never set it (the agenda) are ready on load. -->
+     never set it (the agenda) are ready on load.
+
+     __jpegQuality: 80, not render.js's default 92. Gravel and foliage are
+     fine-grained noise, which costs bytes at high quality: a tank frame was
+     ~188KB at 92 and pushed unevenly (worst push 815-1252ms per 30s on the
+     glass, 2026-10-08, read as stutter). ~104KB at 80. Text panes keep 92. -->
 <script>
   (function () {
     var r = new URLSearchParams(location.search).get('rotate');
     if (r === '180') document.documentElement.dataset.rotate = '180';
     window.__paneReady = false;
+    window.__jpegQuality = 80;
   })();
 </script>
 </head>

@@ -82,8 +82,16 @@ export function stoneText(now, state) {
 
 export const FONT = '"Cascadia Mono", "Cascadia Code", Consolas, ui-monospace, "DejaVu Sans Mono", monospace';
 
-/** Stone geometry, in pane px. */
-export const STONE = Object.freeze({ x: 430, y: 397, w: 420, h: 75 });
+/** Countdown card geometry, in pane px.
+ *
+ * 2026-10-08, first look on the glass — Ricky: the grey "stone" slab "doesn't
+ * look anything like a stone slab ... the data is right, the presentation is
+ * not." It was a slate half-buried in the sand (x 430, y 397, 420x75) with
+ * carved lettering. It is now a standalone LCD card on the front glass, the
+ * same housing as the clock badge and bottom-aligned with it, so the tank has
+ * one UI language instead of a prop and a gadget. The names STONE / paintStone
+ * are kept so nothing downstream had to change. */
+export const STONE = Object.freeze({ x: 356, y: 376, w: 568, h: 90 });
 
 /** Thermometer geometry, in pane px — lower right, on the front glass. */
 export const THERMO = Object.freeze({ x: 1046, y: 376, w: 206, h: 90 });
@@ -94,77 +102,56 @@ const mk = (w, h) => {
   return c;
 };
 
+const DIGIT = '#d6f2e6';
+
+/** Rounded-rect path. */
+function rrect(g, x, y, ww, hh, r) {
+  g.beginPath();
+  g.moveTo(x + r, y);
+  g.arcTo(x + ww, y, x + ww, y + hh, r);
+  g.arcTo(x + ww, y + hh, x, y + hh, r);
+  g.arcTo(x, y + hh, x, y, r);
+  g.arcTo(x, y, x + ww, y, r);
+  g.closePath();
+}
+
+/** The shared LCD housing: grey bezel, dark window, faint top sheen. Used by
+ * both the countdown card and the clock badge so they read as one family. */
+function paintHousing(g, w, h) {
+  rrect(g, 1, 1, w - 2, h - 2, 12);
+  const hs = g.createLinearGradient(0, 0, 0, h);
+  hs.addColorStop(0, '#4b5155');
+  hs.addColorStop(1, '#2a2e31');
+  g.fillStyle = hs;
+  g.fill();
+  g.strokeStyle = 'rgba(255,255,255,0.18)';
+  g.lineWidth = 1;
+  g.stroke();
+
+  rrect(g, 9, 9, w - 18, h - 18, 6);
+  g.fillStyle = '#0c1412';
+  g.fill();
+  g.save();
+  g.clip();
+  const sheen = g.createLinearGradient(0, 9, 0, h / 2);
+  sheen.addColorStop(0, 'rgba(255,255,255,0.08)');
+  sheen.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = sheen;
+  g.fillRect(9, 9, w - 18, h / 2);
+  g.restore();
+}
+
 /**
- * The slate itself — irregular, lit from above. Painted once per tank; the
- * lettering is a separate canvas (paintStoneText) so it can stay legible
- * regardless of the scene light.
+ * The countdown card's housing. Painted once per tank; the readout is a
+ * separate canvas (paintStoneText) so it can change every minute.
  *
- * @param {() => number} rand  seeded [0,1)
+ * @param {() => number} [_rand]  unused since the 2026-10-08 redesign; kept
+ *   so the scene's call site and seeded RNG sequence are unchanged
  */
-export function paintStone(rand) {
+export function paintStone(_rand) {
   const { w, h } = STONE;
   const c = mk(w, h);
-  const g = c.getContext('2d');
-
-  // An irregular slab outline: a rounded rectangle with jittered corners.
-  const pts = [];
-  const N = 72;
-  for (let i = 0; i < N; i++) {
-    const a = (i / N) * Math.PI * 2;
-    const sx = Math.cos(a), sy = Math.sin(a);
-    // Superellipse — flat top and bottom, rounded ends.
-    const px = Math.sign(sx) * Math.pow(Math.abs(sx), 0.35);
-    const py = Math.sign(sy) * Math.pow(Math.abs(sy), 0.5);
-    const j = 1 - (Math.sin(i * 0.7) * 0.5 + 0.5) * 0.02 - rand() * 0.008;
-    pts.push([w / 2 + px * (w / 2 - 4) * j, h / 2 + py * (h / 2 - 5) * j]);
-  }
-  const outline = () => {
-    g.beginPath();
-    pts.forEach(([x, y], i) => (i ? g.lineTo(x, y) : g.moveTo(x, y)));
-    g.closePath();
-  };
-
-  // Contact shadow on the sand.
-  g.save();
-  g.translate(3, 5);
-  outline();
-  g.fillStyle = 'rgba(30,24,16,0.45)';
-  g.fill();
-  g.restore();
-
-  outline();
-  const body = g.createLinearGradient(0, 0, 0, h);
-  body.addColorStop(0, '#5a646a');
-  body.addColorStop(0.12, '#3d454a');
-  body.addColorStop(1, '#22282c');
-  g.fillStyle = body;
-  g.fill();
-
-  g.save();
-  outline();
-  g.clip();
-  // Slate grain: fine horizontal laminations.
-  for (let k = 0; k < 70; k++) {
-    const y = rand() * h;
-    g.strokeStyle = `rgba(${rand() < 0.5 ? '0,0,0' : '255,255,255'},${0.03 + rand() * 0.05})`;
-    g.lineWidth = 0.6 + rand() * 1.4;
-    g.beginPath();
-    g.moveTo(0, y);
-    g.bezierCurveTo(w * 0.3, y + rand() * 4 - 2, w * 0.7, y + rand() * 4 - 2, w, y + rand() * 3 - 1.5);
-    g.stroke();
-  }
-  // Top bevel catching the light bar.
-  const bevel = g.createLinearGradient(0, 0, 0, 10);
-  bevel.addColorStop(0, 'rgba(220,235,240,0.35)');
-  bevel.addColorStop(1, 'rgba(220,235,240,0)');
-  g.fillStyle = bevel;
-  g.fillRect(0, 0, w, 10);
-  g.restore();
-
-  outline();
-  g.strokeStyle = 'rgba(10,12,14,0.8)';
-  g.lineWidth = 1.5;
-  g.stroke();
+  paintHousing(c.getContext('2d'), w, h);
   return c;
 }
 
@@ -180,10 +167,9 @@ function fit(g, text, weight, maxPx, minPx, maxW) {
 }
 
 /**
- * The carved lettering. Pale, chalk-filled letters with a carved inner
- * shadow on their upper edge — reads as inscribed, and stays high contrast
- * against the dark slate. Its own canvas so the shader can keep it legible
- * at night, when the rest of the stone is lit only by moonlight.
+ * The countdown readout: plain LCD digits in the clock badge's colour — the
+ * headline big, the event line smaller and slightly dimmer. Transparent
+ * outside the glyphs; the shader lays it over the housing.
  *
  * @param {{headline: string, detail: string}} text
  */
@@ -193,20 +179,11 @@ export function paintStoneText(text) {
   const g = c.getContext('2d');
   g.textAlign = 'center';
   g.textBaseline = 'middle';
-  const maxW = w - 54;
-
-  const line = (s, weight, maxPx, minPx, y) => {
-    const t = fit(g, s, weight, maxPx, minPx, maxW);
-    // Carved: a dark offset above, then the chalk fill, then a faint lip below.
-    g.fillStyle = 'rgba(0,0,0,0.75)';
-    g.fillText(t, w / 2, y - 1.5);
-    g.fillStyle = '#ece6d6';
-    g.fillText(t, w / 2, y);
-    g.fillStyle = 'rgba(255,255,255,0.18)';
-    g.fillText(t, w / 2, y + 1);
-  };
-  line(text.headline, 700, 34, 22, h * 0.36);
-  line(text.detail, 600, 22, 15, h * 0.72);
+  const maxW = w - 44;
+  g.fillStyle = DIGIT;
+  g.fillText(fit(g, text.headline, 700, 38, 24, maxW), w / 2, 36);
+  g.fillStyle = 'rgba(214,242,230,0.72)';
+  g.fillText(fit(g, text.detail, 600, 20, 14, maxW), w / 2, 67);
   return c;
 }
 
@@ -222,41 +199,9 @@ export function paintThermo({ now, tempF, stale }) {
   const c = mk(w, h);
   const g = c.getContext('2d');
 
-  const rr = (x, y, ww, hh, r) => {
-    g.beginPath();
-    g.moveTo(x + r, y);
-    g.arcTo(x + ww, y, x + ww, y + hh, r);
-    g.arcTo(x + ww, y + hh, x, y + hh, r);
-    g.arcTo(x, y + hh, x, y, r);
-    g.arcTo(x, y, x + ww, y, r);
-    g.closePath();
-  };
+  paintHousing(g, w, h);
 
-  // Housing.
-  rr(1, 1, w - 2, h - 2, 12);
-  const hs = g.createLinearGradient(0, 0, 0, h);
-  hs.addColorStop(0, '#4b5155');
-  hs.addColorStop(1, '#2a2e31');
-  g.fillStyle = hs;
-  g.fill();
-  g.strokeStyle = 'rgba(255,255,255,0.18)';
-  g.lineWidth = 1;
-  g.stroke();
-
-  // LCD window.
-  rr(9, 9, w - 18, h - 18, 6);
-  g.fillStyle = '#0c1412';
-  g.fill();
-  g.save();
-  g.clip();
-  const sheen = g.createLinearGradient(0, 9, 0, h / 2);
-  sheen.addColorStop(0, 'rgba(255,255,255,0.08)');
-  sheen.addColorStop(1, 'rgba(255,255,255,0)');
-  g.fillStyle = sheen;
-  g.fillRect(9, 9, w - 18, h / 2);
-  g.restore();
-
-  const digit = '#d6f2e6';
+  const digit = DIGIT;
   g.textBaseline = 'alphabetic';
   // Clock.
   const t = fmtTime(now);

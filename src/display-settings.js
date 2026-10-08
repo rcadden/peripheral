@@ -124,6 +124,9 @@ export function resolveRotation(saved) {
  *                at 4 here AND in the transport (cadence.js MAX_FPS): the
  *                render loop floors at 250ms, so a higher value would be a
  *                promise the daemon cannot keep.
+ *                SUPERSEDED same day, after fps-test on the real unit: 10 by
+ *                default, options up to 10, capped at 10 in both places, and
+ *                the render floor is now 100ms. See cadence.js MAX_FPS.
  *
  * No env var outranks or defaults these. Rotation has PERIPHERAL_ROTATE for
  * unattended provisioning; nothing about the tank needs to be set before a
@@ -133,8 +136,9 @@ export function resolveRotation(saved) {
 
 /** @typedef {{enabled: boolean, leadMinutes: number, fps: number}} TankSettings */
 
-export const TANK_DEFAULTS = Object.freeze({ enabled: true, leadMinutes: 10, fps: 4 });
-export const TANK_FPS_OPTIONS = [1, 2, 3, 4];
+export const TANK_DEFAULTS = Object.freeze({ enabled: true, leadMinutes: 10, fps: 10 });
+export const TANK_FPS_OPTIONS = [1, 2, 4, 6, 8, 10];
+const TANK_FPS_MAX = TANK_FPS_OPTIONS[TANK_FPS_OPTIONS.length - 1];
 export const TANK_LEAD_RANGE = Object.freeze({ min: 1, max: 60 });
 
 /** A boolean, from JSON or a form control. Absence and junk are null. */
@@ -177,7 +181,7 @@ export function parseTank(raw) {
     else out.leadMinutes = v;
   }
   if (raw.fps !== undefined) {
-    const v = parseIntIn(raw.fps, 1, 4);
+    const v = parseIntIn(raw.fps, 1, TANK_FPS_MAX);
     if (v === null || !TANK_FPS_OPTIONS.includes(v)) console.warn(`[display] ignoring saved tank.fps=${raw.fps}`);
     else out.fps = v;
   }
@@ -207,7 +211,7 @@ export function validateTankStrict(raw) {
     out.leadMinutes = v;
   }
   if (raw.fps !== undefined) {
-    const v = parseIntIn(raw.fps, 1, 4);
+    const v = parseIntIn(raw.fps, 1, TANK_FPS_MAX);
     if (v === null || !TANK_FPS_OPTIONS.includes(v)) {
       throw new Error(`tank.fps must be one of ${TANK_FPS_OPTIONS.join(', ')} — got ${raw.fps}`);
     }

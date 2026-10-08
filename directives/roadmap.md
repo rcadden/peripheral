@@ -949,7 +949,18 @@ supervised thing is running.* Nobody checked what the watchdog says while the
 attached, `down` is the only state reachable — which is enough to build
 against and not enough to prove the `ok` path still reports correctly.
 
-## Sprint 9 — Fish tank idle mode — ~~NOT STARTED, planned 2026-10-07~~ **BUILT 2026-10-08 (overnight), NOT YET SEEN ON THE GLASS**
+## Sprint 9 — Fish tank idle mode — ~~NOT STARTED, planned 2026-10-07~~ ~~**BUILT 2026-10-08 (overnight), NOT YET SEEN ON THE GLASS**~~ **ON THE GLASS 2026-10-08 — IN ITERATION; fish behaviour not accepted**
+
+> **Status, 2026-10-08 (day session, appended).** Ricky watched it on the
+> panel all morning. Settled on the glass: the gate measurements (panel holds
+> **10 fps** cleanly; GPU path confirmed), the cadence (**re-decided: 10 fps**),
+> and the countdown card ("the card looks fine"). Improved but open: stutter
+> (root cause found — Task Scheduler's below-normal priority — and fixed;
+> ~2 hitches/min remain). **Not accepted:** fish behaviour ("I don't think you
+> fully understand how a fish tank works") and the **floating shadows**, which
+> Ricky still sees though every render captured is clean. Next unit of work is
+> a written behaviour spec, built from Ricky's reference clips and Deskworlds'
+> model, approved before any code. See CHANGELOG 2026-10-08 (day session).
 
 > **Status, 2026-10-08.** Built end to end in one overnight session from this
 > plan, after Ricky answered the open questions (cadence **4 fps**, **on by
@@ -994,7 +1005,12 @@ screenshots to reading frames off the page's own canvas, that is a change to
 
 ### The gate — spike first, stop if it fails
 
-- [~] **Measure the transport's ceiling.** *Tool built 2026-10-08 —
+- [x] **Measure the transport's ceiling.** **DONE 2026-10-08 on the real
+      panel, watched by Ricky:** 6, 8 and 10 fps held exactly (0 failed, 0
+      late, worst push 78–94ms, ~151KB frames); 12 fps dropped 9 slots; 15
+      achieved 12.9. On the glass: "10 and 12 definitely look the smoothest",
+      every rate visibly stepped (the test bar jumps ~48px/frame). *Original
+      text follows.* *Tool built 2026-10-08 —
       `npm run fps-test` (steps 2/4/5/10/15 fps, 20s each, prints achieved
       rate, push p95/worst, failures, late pushes). **Not yet run on the
       panel.*** Push a synthetic animated sequence
@@ -1005,8 +1021,12 @@ screenshots to reading frames off the page's own canvas, that is a change to
       true, deliberately: the render loop now ticks at that floor and the
       transport enforces the same 4 fps ceiling.)*
 - [ ] **Measure it under load** (Teams call + a build) — the same standing-watch
-      item, now load-bearing.
-- [~] **Confirm WebGL is on the GPU.** *2026-10-08: ANGLE/D3D11 flags added
+      item, now load-bearing. *(2026-10-08: one load case done — Chromium
+      capturing the tank ~9x/s alongside fps-test did NOT slow pushes, 49.7ms
+      avg vs 51.6ms alone. Teams + build still unmeasured.)*
+- [x] **Confirm WebGL is on the GPU.** **CONFIRMED 2026-10-08:** `[tank] webgl
+      renderer: ANGLE (Intel, Intel(R) Iris(R) Xe Graphics … Direct3D11 …)`;
+      a tank capture takes 18–90ms. *Original text follows.* *2026-10-08: ANGLE/D3D11 flags added
       on Windows in `render.js`, and the tank logs `[tank] webgl renderer: …`
       to `daemon.log` on every load — read that line. Unconfirmed. Measured
       fallback: on SwiftShader a tank frame captures in ~120–250ms, so
@@ -1021,11 +1041,53 @@ screenshots to reading frames off the page's own canvas, that is a change to
       this panel. Options include a low animated rate (e.g. 4–6 fps with slow,
       drifting motion designed for it), or animating only some of the time.
       This decision sets the motion budget for everything below.
-- [ ] **Water lighting alone, on the glass.** Second gate: if the spike plus
+      **RE-DECIDED 2026-10-08, same day, after the measurement: 10 fps.** At 4
+      fps the tank was "more of a slideshow than an animation"; the panel held
+      10 cleanly. Settable 1/2/4/6/8/10. The lifespan cost of 2.5x the writes
+      is unmeasured and accepted. Achieved in the daemon: ~7.5 fps (see the
+      Windows timer-grid item below).
+- [~] **Water lighting alone, on the glass.** *2026-10-08: the whole tank has
+      been on the glass all day. Card accepted; shadows and fish behaviour not
+      — see the new items below.* Second gate: if the spike plus
       the lighting do not look convincing *on the panel* — not in a browser —
       stop here. *(2026-10-08: superseded in practice — the whole tank was
       built, so this becomes "the whole tank, on the glass". If it does not
       convince, the off switch is at `/settings/palette/` and costs nothing.)*
+
+### Found on the glass, 2026-10-08 — open
+
+- [ ] **Fish behaviour — CRITICAL PATH. Spec first, then code.** Three
+      attempts (shared target; widened target; per-fish waypoints) all read
+      as "a current" or wrong to Ricky. Write a one-page behaviour spec —
+      hover/station-keeping, burst-and-coast, excursions and recruitment,
+      loose spacing, turns — from (a) Deskworlds' MIT riverscape model
+      (`github.com/chaseleantj/deskworlds`, `scenes/riverscape/src/fish.js`,
+      cites Li et al. 2021), and (b) Ricky's five reference clips in
+      `C:\Users\grcad\Videos\2026-10-08 09-*.mp4` (NOT the 06-25 file — that
+      is an unrelated Zoom recording), analysed as extracted frames. **Ricky
+      prefers the freshwater "riverbed" look, not saltwater** — clip 5
+      (rainbowfish over carpet) is the closest match. Ricky approves the spec
+      before any code.
+- [ ] **Floating shadows on the grass.** Ricky still sees them after the
+      caustic gains were cut; 60 consecutive rendered frames show none, and
+      they do not track stutters. Cause unknown — get a photo/video of the
+      glass before theorising again.
+- [ ] **Variety.** Ricky has only ever seen 2 fish shapes ("I'd like to see
+      more variety, but we can solve that later"). One school + one
+      centrepiece + one grazer group per day today.
+- [ ] **Shrimp are invisible on the glass** — red cherry shrimp lost in the
+      green carpet even at 2x.
+- [ ] **Residual hitches** — ~2/min of 0.4–0.8s pushes at normal priority.
+      Hitch log (`[hid] hitch`) records each with timing and what the main
+      thread was doing.
+- [ ] **Daemon reaches ~7.5 fps, not 10.** Part is the worker's 25ms tick on
+      Windows' 15.6ms timer grid (gaps of 109–125ms instead of 100). One-line
+      change to try.
+- [ ] **Motion blur** (temporal supersampling per output frame) — held until
+      the fish have been judged at the new rate.
+- [ ] **`startup:uninstall` leaves the daemon running, unsupervised.** Seen 3x
+      on 2026-10-08: stopping the logon task kills `hidden.vbs` but orphans
+      `node src\daemon.js`.
 
 ### Mode rule
 
@@ -1112,7 +1174,7 @@ sway, fish, caustics, particulates and the surface.
 
 | Information | In the scene |
 |---|---|
-| Next meeting (title + "in 42m") | A flat inscribed slate stone in the sand path, foreground centre. Carved lettering at high contrast — legibility beats subtlety. Updates once a minute; glows faintly from ~T-20. |
+| Next meeting (title + "in 42m") | ~~A flat inscribed slate stone in the sand path, foreground centre. Carved lettering at high contrast — legibility beats subtlety.~~ **SUPERSEDED 2026-10-08:** an LCD card on the front glass, same housing as the clock, bottom-aligned with it — Ricky: the slab "doesn't look anything like a stone slab… the data is right, the presentation is not." Confirmed on the glass: "the card looks fine." Updates once a minute; glows faintly from ~T-20. |
 | Outdoor temperature (`NwsProvider`) | A stick-on digital thermometer on the glass, lower right |
 | Clock | The same thermometer unit |
 | Conditions | Rain/snow: drops on the surface. Overcast: dimmer, cooler light. Clear: strong caustics. |
@@ -1127,7 +1189,7 @@ a Future Exploration for the agenda; the stone is a natural home for it.
 
 ### Open questions for Ricky
 
-- [x] The cadence decision above — the one that matters. **4 fps** (2026-10-08).
+- [x] The cadence decision above — the one that matters. ~~**4 fps** (2026-10-08).~~ **10 fps** (re-decided 2026-10-08 after fps-test on the panel).
 - [x] Overnight and weekends: tank always (recommended — the sunset-driven
       light bar already makes a natural night mode), or blank/extra-dim
       outside an hour range. **Tank always** (2026-10-08).

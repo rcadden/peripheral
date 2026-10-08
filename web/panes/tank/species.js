@@ -24,25 +24,25 @@
 export const SPECIES = {
   /* ── schooling species (exactly one per tank) ─────────────────────────── */
   neon:      { id: 'neon',      name: 'Neon tetra',        role: 'school', style: 'school',
-               length: 49, depth: 0.30, band: [130, 330], speed: [14, 30], count: [11, 15], beatHz: 1.1 },
+               length: 49, depth: 0.30, band: [85, 300], speed: [14, 30], count: [11, 15], beatHz: 1.1 },
   cardinal:  { id: 'cardinal',  name: 'Cardinal tetra',    role: 'school', style: 'school',
-               length: 55, depth: 0.30, band: [130, 330], speed: [14, 30], count: [10, 14], beatHz: 1.0 },
+               length: 55, depth: 0.30, band: [85, 300], speed: [14, 30], count: [10, 14], beatHz: 1.0 },
   ember:     { id: 'ember',     name: 'Ember tetra',       role: 'school', style: 'school',
-               length: 36, depth: 0.32, band: [120, 320], speed: [12, 26], count: [13, 18], beatHz: 1.2 },
+               length: 36, depth: 0.32, band: [85, 300], speed: [12, 26], count: [13, 18], beatHz: 1.2 },
   rummynose: { id: 'rummynose', name: 'Rummy-nose tetra',  role: 'school', style: 'school',
-               length: 60, depth: 0.27, band: [140, 330], speed: [16, 32], count: [9, 12], beatHz: 1.0 },
+               length: 60, depth: 0.27, band: [85, 300], speed: [16, 32], count: [9, 12], beatHz: 1.0 },
   harlequin: { id: 'harlequin', name: 'Harlequin rasbora', role: 'school', style: 'school',
-               length: 57, depth: 0.33, band: [120, 300], speed: [14, 28], count: [9, 13], beatHz: 1.0 },
+               length: 57, depth: 0.33, band: [85, 300], speed: [14, 28], count: [9, 13], beatHz: 1.0 },
   chili:     { id: 'chili',     name: 'Chili rasbora',     role: 'school', style: 'school',
-               length: 29, depth: 0.30, band: [140, 320], speed: [10, 22], count: [15, 20], beatHz: 1.3 },
+               length: 29, depth: 0.30, band: [85, 300], speed: [10, 22], count: [15, 20], beatHz: 1.3 },
 
   /* ── centrepiece (optional, one species) ──────────────────────────────── */
   honey:     { id: 'honey',     name: 'Honey gourami',     role: 'centerpiece', style: 'cruise',
-               length: 81, depth: 0.48, band: [100, 280], speed: [7, 14], count: [1, 2], beatHz: 0.7 },
+               length: 81, depth: 0.48, band: [80, 310], speed: [7, 14], count: [1, 2], beatHz: 0.7 },
   dwarf:     { id: 'dwarf',     name: 'Dwarf gourami',     role: 'centerpiece', style: 'cruise',
-               length: 94, depth: 0.50, band: [100, 280], speed: [7, 13], count: [1, 1], beatHz: 0.7 },
+               length: 94, depth: 0.50, band: [80, 310], speed: [7, 13], count: [1, 1], beatHz: 0.7 },
   pearl:     { id: 'pearl',     name: 'Pearl gourami',     role: 'centerpiece', style: 'cruise',
-               length: 120, depth: 0.46, band: [100, 270], speed: [6, 12], count: [1, 2], beatHz: 0.6 },
+               length: 120, depth: 0.46, band: [80, 310], speed: [6, 12], count: [1, 2], beatHz: 0.6 },
 
   /* ── grazers (optional, one group) ────────────────────────────────────── */
   corydoras: { id: 'corydoras', name: 'Panda corydoras',   role: 'grazer', style: 'bottom',
@@ -55,6 +55,26 @@ export const SPECIES = {
                length: 29, depth: 0.45, band: [340, 368], speed: [2, 6], count: [6, 9], beatHz: 0.8 },
 };
 
+/* 2026-10-08, first look on the glass — Ricky: "the fish are way too small -
+ * should be 2x as big." The table above keeps the original values (the 30%
+ * boost already included); this doubles every animal's on-screen length.
+ * School spacing and texture resolution both derive from `length`, so they
+ * follow. Cruising speeds are unchanged — px/s, not body-lengths/s. */
+export const DISPLAY_SCALE = 2;
+/* Later the same day, after the doubling — Ricky: "they're moving suuuuuuper
+ * slow." Two causes stacked: doubling length at the same px/s halved their
+ * speed in body-lengths, and the speeds were set for 4 fps, where anything
+ * faster teleported. The tank now runs ~8-10 fps (fps-test, cadence.js), so
+ * speeds get the size factor back AND another 1.5x: 3x the table above. */
+export const SPEED_SCALE = DISPLAY_SCALE * 1.5;
+for (const sp of Object.values(SPECIES)) {
+  sp.length *= DISPLAY_SCALE;
+  sp.speed = sp.speed.map((v) => v * SPEED_SCALE);
+}
+
+/* Swim bands widened 2026-10-08 (schools ~[130,330] -> [85,300], centrepieces
+ * [100,280] -> [80,310]): the old bands kept everything in a horizontal strip.
+ * Grazers keep theirs — they live on the substrate. */
 export const SCHOOLING = ['neon', 'cardinal', 'ember', 'rummynose', 'harlequin', 'chili'];
 export const CENTERPIECES = ['honey', 'dwarf', 'pearl'];
 export const GRAZERS = ['corydoras', 'otocinclus', 'amano', 'cherry'];

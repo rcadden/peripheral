@@ -73,8 +73,11 @@ const WEB_DIR = path.resolve(__dirname, '..', 'web');
 
 const SOURCE_INTERVAL_MS = 60_000;
 const FPS = Number(process.env.PERIPHERAL_FPS ?? 1);
-/** The floor on any capture interval — 4 fps. See cadence.js MAX_FPS. */
-const RENDER_FLOOR_MS = 250;
+/** The floor on any capture interval — 10 fps since 2026-10-08 (was 250ms,
+ * 4 fps). See cadence.js MAX_FPS. The agenda is unaffected: it still renders
+ * every RENDER_INTERVAL_MS; only the tick that checks whether a capture is due
+ * runs this often, and that check is cheap. */
+const RENDER_FLOOR_MS = 100;
 const RENDER_INTERVAL_MS = Math.max(RENDER_FLOOR_MS, Math.round(1000 / FPS));
 /* The render loop ticks at the floor and decides per tick whether a capture
  * is due — the agenda every RENDER_INTERVAL_MS as before, the fish tank every
@@ -171,6 +174,20 @@ let currentFrameAt = 0;
  * The push loop has its own guard, on its own thread. */
 let rendering = false;
 
+/* Recent main-thread work, kept so a transport hitch can be lined up against
+ * what else the PC was doing at that moment (2026-10-08, tank stutter). The
+ * push runs on its own thread, so overlap is correlation, not proof. */
+const activity = [];
+function track(what, start) {
+  activity.push({ what, start, end: Date.now() });
+  if (activity.length > 64) activity.shift();
+}
+function overlapping(from, to) {
+  const hits = activity.filter((a) => a.start < to && a.end > from)
+    .map((a) => `${a.what}:${a.end - a.start}ms`);
+  return hits.length ? `during=[${hits.join(',')}]` : 'during=[idle]';
+}
+
 let renderer = null;
 let rendererOpen = false;
 let paneUrl = null;
@@ -224,7 +241,9 @@ function buildProviders() {
 
 async function refreshState() {
   try {
+    const fetchStart = Date.now();
     const state = await collect(providers);
+    track('calendar-fetch', fetchStart);
     lastGood = state;
     calendarStale = false;
     consecutiveFailures = 0;
@@ -284,7 +303,9 @@ async function applyLocationIfChanged() {
 async function refreshWeather() {
   await applyLocationIfChanged();
   try {
+    const fetchStart = Date.now();
     const weather = await weatherProvider.fetchNow();
+    track('weather-fetch', fetchStart);
     lastGoodWeather = weather;
     weatherConsecutiveFailures = 0;
     publishState();
@@ -420,7 +441,9 @@ async function renderTick() {
 
   rendering = true;
   try {
+    const capStart = Date.now();
     const jpeg = await renderer.capture();
+    track(`capture-${mode}`, capStart);
     if (jpeg) {
       currentFrame = jpeg;
       currentFrameAt = Date.now();
@@ -700,6 +723,7 @@ async function main() {
   // Transport first: if the panel is absent we still want the browser fallback
   // running, so this is a warning rather than a fatal error.
   panel = new PanelProxy();
+  panel.onHitch = (h) => overlapping(h.at, h.at + h.ms) + (rendering ? ' +render-in-flight' : '');
   if (!(await panel.open())) {
     console.warn(`[daemon] panel unavailable: ${panel.lastError?.message}`);
     console.warn('[daemon] continuing — the pane URL above is the fallback');

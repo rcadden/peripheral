@@ -182,6 +182,11 @@ export class PanelTransport {
   #info = null;
   #frameDir = null;
 
+  /** Where the last push spent its time — read by the worker's hitch log.
+   * One slow chunk means the endpoint paused; uniformly slow chunks mean the
+   * bus was busy. @type {{chunks:number, writeMs:number, worstChunkMs:number, worstChunkIdx:number}|null} */
+  lastPushTiming = null;
+
   get healthy() { return this.#healthy; }
   get lastError() { return this.#lastError; }
   /** Handshake result: { pm, sub, short } once open() has succeeded. */
@@ -306,10 +311,18 @@ export class PanelTransport {
 
     if (!this.#device) return false;
 
+    const t = { chunks: 0, writeMs: 0, worstChunkMs: 0, worstChunkIdx: -1 };
+    this.lastPushTiming = t;
+    const t0 = performance.now();
     try {
       for (let offset = 0; offset < packet.length; offset += CHUNK) {
         const chunk = packet.subarray(offset, offset + CHUNK);
+        const c0 = performance.now();
         const written = this.#writeReport(chunk);
+        const cms = performance.now() - c0;
+        if (cms > t.worstChunkMs) { t.worstChunkMs = cms; t.worstChunkIdx = t.chunks; }
+        t.chunks++;
+        t.writeMs = performance.now() - t0;
         // A short write is the real failure. Windows counts the report-ID byte,
         // so a full chunk reports 513 — hence >=, not ===. An equality check
         // here wrongly failed every Windows frame (reference issue #240).

@@ -60,6 +60,13 @@ import { pushDue, clampGap } from './cadence.js';
  */
 const SLOW_PUSH_MS = IDLE_TIMEOUT_MS;
 
+/** A push this long is logged as a hitch: harmless to the panel, visible as
+ * stutter in the tank. 400ms is just under the worst push fps-test measured
+ * at 4 fps (423ms, 2026-10-08). Override PERIPHERAL_HITCH_MS. */
+const HITCH_MS = Number(process.env.PERIPHERAL_HITCH_MS ?? 400) || 400;
+
+const PUSH_TRACE = process.env.PERIPHERAL_PUSH_TRACE === '1';
+
 /**
  * Consecutive slow pushes before the device is dropped and reopened. Reopening
  * is what cleared comparable states in the old main-thread code, and it costs a
@@ -96,6 +103,7 @@ const panel = new PanelTransport();
 /** The most recent frame from the renderer. Pushed repeatedly until replaced. */
 let frame = null;
 let frameSeq = 0;
+let frameAt = 0;
 
 let pushed = 0;
 let failures = 0;
@@ -182,6 +190,8 @@ async function pushTick() {
 
   pushing = true;
   const started = now;
+  const prevPushAt = lastPushAt;
+  const repeat = frameSeq === lastPushedSeq;
   lastPushAt = now;
   lastPushedSeq = frameSeq;
   try {
@@ -192,6 +202,14 @@ async function pushTick() {
      * fault that repeats forever cannot show that recovery works. */
     if (DEBUG_BLOCK_MS && pushed + 1 === DEBUG_BLOCK_AFTER) blockThread(DEBUG_BLOCK_MS);
     lastPushMs = Date.now() - started;
+    /* Per-push trace, off unless PERIPHERAL_PUSH_TRACE=1 — added 2026-10-08
+     * when the daemon reached ~6 fps at a 10 fps cadence while the same
+     * writes made directly reached ~9. Shows where the time between pushes
+     * goes: in the write, or in waiting for a tick / a new frame. */
+    if (PUSH_TRACE) {
+      log('info', `trace push=${lastPushMs}ms gap=${prevPushAt ? started - prevPushAt : '-'}ms ` +
+        `${repeat ? 'keepalive' : 'new'} frameAge=${started - frameAt}ms`);
+    }
 
     if (ok) {
       pushed++;
@@ -211,6 +229,24 @@ async function pushTick() {
         }
       } else {
         slowRun = 0;
+        /* A hitch: under the forget window, so the panel survives it, but long
+         * enough to read as stutter in the animated tank (2026-10-08). Reported
+         * with where the time went so the cause can be found, not guessed. */
+        if (lastPushMs >= HITCH_MS) {
+          const t = panel.lastPushTiming;
+          post({
+            type: 'hitch',
+            at: started,
+            ms: lastPushMs,
+            bytes: frame.length,
+            kind: repeat ? 'keepalive' : 'new',
+            sinceLastPushMs: prevPushAt ? started - prevPushAt : null,
+            chunks: t?.chunks ?? null,
+            writeMs: t ? Math.round(t.writeMs) : null,
+            worstChunkMs: t ? Math.round(t.worstChunkMs) : null,
+            worstChunkIdx: t?.worstChunkIdx ?? null,
+          });
+        }
       }
     } else {
       failures++;
@@ -235,6 +271,7 @@ parentPort.on('message', (msg) => {
     // Buffer.from(view.buffer, ...) wraps without copying again.
     frame = Buffer.from(msg.jpeg.buffer, msg.jpeg.byteOffset, msg.jpeg.byteLength);
     frameSeq = msg.seq;
+    frameAt = Date.now();
   } else if (msg?.type === 'cadence') {
     const next = clampGap(msg.minGapMs, KEEPALIVE_INTERVAL_MS);
     if (next !== minGapMs) log('info', `push cadence: new frames up to every ${next}ms`);

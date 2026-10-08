@@ -33,7 +33,12 @@ import { KEEPALIVE_INTERVAL_MS } from './hid.js';
  * is a deliberate act — PERIPHERAL_MAX_FPS — for running the Sprint 9 spike
  * (`npm run fps-test`) on the real unit, never a settings-UI value.
  */
-export const MAX_FPS = Math.max(1, Number(process.env.PERIPHERAL_MAX_FPS ?? 4) || 4);
+/* Raised 4 -> 10, 2026-10-08, after measuring: `npm run fps-test` on the real
+ * unit held 6, 8 and 10 fps exactly (0 failed, 0 late, worst push 83-94ms)
+ * and started dropping slots at 12. Ricky watched each step: "10 and 12
+ * definitely look the smoothest". 10 is the highest rate the panel sustained
+ * cleanly. The lifespan cost of 2.5x the writes is unmeasurable and his call. */
+export const MAX_FPS = Math.max(1, Number(process.env.PERIPHERAL_MAX_FPS ?? 10) || 10);
 
 /** The shortest gap between two pushes the transport will ever allow. */
 export const MIN_GAP_FLOOR_MS = Math.round(1000 / MAX_FPS);

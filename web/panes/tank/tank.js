@@ -102,10 +102,11 @@ function refreshInfo(now, force = false) {
   tank.setLight(light);
   if (!force && key === lastInfoKey) return;
   lastInfoKey = key;
-  tank.setStoneText(text, text.glow);
-  // The LCD dims a little at night so it is not the brightest thing in the
+  // The LCDs dim a little at night so they are not the brightest thing in the
   // room, but never below legibility.
-  tank.setThermo({ now, tempF: weather?.tempF ?? null, stale }, light.phase === 'night' ? 0.82 : 1);
+  const lcd = light.phase === 'night' ? 0.82 : 1;
+  tank.setStoneText(text, text.glow, lcd);
+  tank.setThermo({ now, tempF: weather?.tempF ?? null, stale }, lcd);
 }
 
 /* ── lifecycle ─────────────────────────────────────────────────────────── */

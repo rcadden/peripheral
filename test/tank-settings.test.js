@@ -17,8 +17,8 @@ import {
 let n = 0;
 const tmp = () => path.join(os.tmpdir(), `peripheral-tank-settings-${process.pid}-${n++}.json`);
 
-test('defaults: on, 10 minutes of lead, 4 fps — Ricky 2026-10-08', () => {
-  assert.deepEqual(TANK_DEFAULTS, { enabled: true, leadMinutes: 10, fps: 4 });
+test('defaults: on, 10 minutes of lead, 10 fps — Ricky 2026-10-08, after fps-test', () => {
+  assert.deepEqual(TANK_DEFAULTS, { enabled: true, leadMinutes: 10, fps: 10 });
   assert.deepEqual(resolveTank(null), TANK_DEFAULTS);
 });
 
@@ -54,8 +54,8 @@ test('a tank-only file leaves rotation to the env/default chain', async () => {
 });
 
 test('form-control strings are accepted', () => {
-  assert.deepEqual(validateTankStrict({ enabled: 'false', leadMinutes: '12', fps: '3' }),
-                   { enabled: false, leadMinutes: 12, fps: 3 });
+  assert.deepEqual(validateTankStrict({ enabled: 'false', leadMinutes: '12', fps: '6' }),
+                   { enabled: false, leadMinutes: 12, fps: 6 });
 });
 
 test('an empty lead field is an absence, not zero minutes', () => {
@@ -79,5 +79,5 @@ test('a hand-edited bad field falls back to its default without losing the other
   }));
   const saved = await new DisplaySettingsStore(p).load();
   assert.equal(saved.rotate, 180);
-  assert.deepEqual(resolveTank(saved), { enabled: false, leadMinutes: 10, fps: 4 });
+  assert.deepEqual(resolveTank(saved), { enabled: false, leadMinutes: 10, fps: 10 });
 });

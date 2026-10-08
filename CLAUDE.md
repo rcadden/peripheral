@@ -175,7 +175,8 @@ not act**: a watchdog restarting the daemon on `panel=down` would have spent the
 afternoon restarting a healthy daemon because its owner went downstairs.
 
 **Sprint 9 — Fish tank idle mode — built 2026-10-08 in one overnight
-session, NOT YET SEEN ON THE GLASS.** During free time the panel shows a
+session, ~~NOT YET SEEN ON THE GLASS~~ (on the glass the same day — see the
+next paragraph).** During free time the panel shows a
 procedurally generated aquarium (`web/panes/tank/`, three.js vendored); the
 agenda takes the glass back during events and 10 minutes before the next one.
 The next meeting is carved into a slate stone in the sand, the clock and
@@ -190,8 +191,20 @@ no panel, Windows or GPU in the build container — so it runs now:
 transport (`src/transport/cadence.js`). Verified by rendering, a dry-run
 daemon and 187 tests; everything Windows is unverified.
 
+**Sprint 9 on the glass, 2026-10-08 (day session).** Ricky watched it all
+morning and it was iterated live. **Settled:** the panel holds **10 fps**
+cleanly (fps-test, watched), so the cadence was re-decided **4 → 10 fps**; the
+GPU path is confirmed (Intel Iris Xe, D3D11); the slate stone became an **LCD
+card on the glass** matching the clock ("the card looks fine"). **The stutter's
+root cause was Task Scheduler's default below-normal priority** — found by
+elimination, fixed with `-Priority 4`; ~2 hitches/min remain, now logged with
+timing. **Not accepted: fish behaviour** — three invented models all read as
+"a current" — and **floating shadows** Ricky still sees though every render is
+clean. Next: a written behaviour spec from Deskworlds' research-backed model
+and Ricky's reference clips (freshwater "riverbed" look), approved before code.
+
 > **Starting a session? Read
-> [`docs/plans/session-handoff-2026-10-08.md`](docs/plans/session-handoff-2026-10-08.md)
+> [`docs/plans/session-handoff-2026-10-08b.md`](docs/plans/session-handoff-2026-10-08b.md)
 > first.** It has the ordered next actions, what is verified and by what
 > method, and the open questions that need Ricky.
 
@@ -465,11 +478,58 @@ interchangeably. Nothing else in the build depends on which one we get.
 - **The fish tank (Sprint 9) departs from all of the above on purpose.** It is
   an idle mode, not a restyle: a lit, colourful, photographic-feeling scene
   where the agenda is flat near-black. The agenda's rules are untouched; the
-  tank's only obligations are that its information (stone, thermometer) stays
+  tank's only obligations are that its information (card, thermometer) stays
   high-contrast at every light level and that it never hides a meeting.
 - Type scale is tuned for 6.86" read from ~3 feet, not for a desktop monitor.
 
 ## Lessons Learned
+- **2026-10-08 — A loop that must feed hardware on a deadline cannot run at
+  background priority, and Task Scheduler puts everything there by default.**
+  The tank stuttered: pushes of 400–1243ms in the daemon while `fps-test`,
+  minutes later on the same machine, pushed the same panel in 50–94ms. Found
+  by elimination — Chromium contention, the worker thread and the frame size
+  were each tested and ruled out — before the one remaining difference: **how
+  the process was launched.** A scheduled task defaults to priority 7, below
+  normal for CPU *and* I/O; the same daemon from a terminal ran ~30% faster
+  with a third of the worst-case latency. `-Priority 4` fixed it.
+  **Standing rule: when a test path and the production path disagree, diff the
+  launch context — priority, environment, user, working directory — before
+  the code.** This is the 2026-08-17 lesson ("a scheduled task inherits no
+  shell environment") recurring in a new dimension: the task is a different
+  runtime, not just a different trigger. **Corollary:** set priority
+  explicitly on any task that does real-time work; never inherit it.
+- **2026-10-08 — Three fish behaviour models were invented, measured, and
+  rejected on the glass. The fourth should not be invented.** Each version
+  (shared wandering target; wider target; per-fish waypoints) was tuned
+  against numbers I chose — reversals per minute, alignment — and each one
+  passed its own numbers and still read to Ricky as "a current… instead of
+  milling about." His verdict: *"I don't think you fully understand how a
+  fish tank works."* A researched model already existed (Deskworlds'
+  riverscape fish, MIT, citing Li et al. 2021): station-keeping hovers,
+  burst-and-coast swimming, recruitment by departing neighbours. None of
+  those three ideas appeared in any of my versions.
+  **Standing rule: for behaviour that every viewer has an intuition about —
+  animals, water, physics — find a reference model or real footage BEFORE the
+  first version, and write the spec down for approval.** A metric I invent
+  measures my model's opinion of itself, which is the same failure as
+  "29/29 pushes" describing the daemon's opinion of itself.
+- **2026-10-08 — Scaling one quantity silently broke a constant tied to it.**
+  Doubling fish length left the school's neighbour radius at a fixed 110px
+  while separation is 0.9 body lengths, so each fish's personal space (~88px)
+  nearly filled the radius it could see neighbours in, and the school
+  scattered across the tank. **Standing rule, extending the 2026-08-18
+  breakpoint lesson: when a size changes, grep for absolute-pixel constants
+  that were tuned against it** — in sizing, layout *or* simulation.
+- **2026-10-08 — RECURRENCE of "prove the check can return something," twice.**
+  (1) A process filter `*srcdaemon.js*` (backslash) could never match
+  `npm run serve`'s `node … src/server.js` (forward slash); the standalone
+  server survived a "stop" and was only caught because the port still
+  answered. (2) A log-wait loop matched the **previous** daemon run's
+  heartbeats and reported stale numbers as the new run's — caught because the
+  lines said "4 fps" after the change to 10. **Practical form: anchor any
+  log read to the current launch's line number, and confirm a kill by the
+  thing it was meant to stop (the port, the device), not by the filter's
+  silence.**
 - **2026-10-08 — A generated part that is small in the composite can be wrong
   for as long as nobody looks at it alone.** Every procedurally painted fish
   was a teardrop with a needle nose — the body-depth exponent put the deepest

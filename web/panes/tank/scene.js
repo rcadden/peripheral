@@ -236,19 +236,17 @@ const STONE_FRAG = /* glsl */`
   uniform float uTime;
   uniform float uCaustic;
   uniform float uGlow;
+  uniform float uBright;
   varying vec2 vUv;
   varying vec2 vPix;
-  ${CAUSTIC}
   void main() {
     vec4 s = texture2D(map, vUv);
     vec4 t = texture2D(textMap, vUv);
     if (s.a < 0.02 && t.a < 0.02) discard;
-    vec3 col = s.rgb * uLight * uIntensity;
-    col += s.rgb * uLight * caustic(vPix, uTime * 0.35) * uCaustic * 0.6;
-    // Lettering stays legible whatever the light: it never drops below 85%
-    // of its painted brightness, and it glows from ~T-20.
-    float lit = max(0.85, uIntensity);
-    vec3 letters = t.rgb * mix(vec3(1.0), uLight, 0.25) * lit;
+    // An LCD card on the front glass since 2026-10-08, not a stone in the
+    // water: no scene light, no caustics — the same dimming as the clock.
+    vec3 col = s.rgb * uBright;
+    vec3 letters = t.rgb * uBright;
     letters += vec3(0.55, 0.85, 1.0) * uGlow * (0.18 + 0.08 * sin(uTime * 1.2)) * t.a;
     col = mix(col, letters, t.a);
     gl_FragColor = vec4(col, max(s.a, t.a));
@@ -402,12 +400,18 @@ export class TankScene {
     const substrate = paintSubstrate(layout);
     const front = paintFront(layout);
 
+    /* Caustic gains cut 2026-10-08 (substrate 0.6 -> 0.2, wood 0.45 -> 0.25,
+     * mid 0.3 -> 0.15, front 0.2 -> 0.1). At full strength the bright web
+     * left its unlit cells — and the crisp folds where the pattern crosses
+     * zero — reading as dark shapes, and at 4 fps they jumped rather than
+     * drifted: Ricky saw "weird floating shadows ... most noticeable on the
+     * grass". Confirmed by rendering with every fish hidden. */
     layer(backdrop, 0, { shimmer: 1 });
     layer(backPlants, 10, { sway: 7, fog: 0.16, caustic: 0.15, swayHeight: 320 });
-    layer(wood, 20, { caustic: 0.45 });
-    layer(mid, 30, { sway: 5, caustic: 0.3, swayHeight: 220 });
-    layer(substrate, 40, { caustic: 0.6 });
-    layer(front, 50, { sway: 9, swayBase: H, swayHeight: 300, caustic: 0.2 });
+    layer(wood, 20, { caustic: 0.25 });
+    layer(mid, 30, { sway: 5, caustic: 0.15, swayHeight: 220 });
+    layer(substrate, 40, { caustic: 0.2 });
+    layer(front, 50, { sway: 9, swayBase: H, swayHeight: 300, caustic: 0.1 });
 
     // Reflection band under the surface, and the hood above it.
     const refl = paintReflection([backdrop, backPlants, wood, mid]);
@@ -502,8 +506,10 @@ export class TankScene {
       map: { value: tex(paintStone(sr.next)) },
       textMap: { value: null },
       uGlow: { value: 0 },
+      uBright: { value: 1 },
     });
-    scene.add(plane(this.stoneMat, STONE.x, STONE.y, STONE.w, STONE.h, 55));
+    // 90, with the clock: on the glass, in front of everything in the water.
+    scene.add(plane(this.stoneMat, STONE.x, STONE.y, STONE.w, STONE.h, 90));
 
     this.thermoMat = shaderMat(FLAT_FRAG, { map: { value: null }, uBright: { value: 1 } });
     scene.add(plane(this.thermoMat, THERMO.x, THERMO.y, THERMO.w, THERMO.h, 90));
@@ -514,7 +520,8 @@ export class TankScene {
   }
 
   /** Replace the stone's lettering. */
-  setStoneText(text, glow) {
+  setStoneText(text, glow, brightness = 1) {
+    this.stoneMat.uniforms.uBright.value = brightness;
     const old = this.stoneMat.uniforms.textMap.value;
     const t = texture(paintStoneText(text));
     t.generateMipmaps = false;
@@ -592,7 +599,7 @@ export class TankScene {
       u.uPhase.value = a.phase;
       u.uFace.value = Math.abs(a.face) < 0.08 ? 0.08 * Math.sign(a.face || 1) : a.face;
       u.uAmp.value = a.sp.style === 'shrimp' ? 0.0 : 0.05;
-      u.uFog.value = a.z * 0.42;
+      u.uFog.value = a.z * 0.25; // was 0.42: deep fish read as fading out (2026-10-08)
       u.uIrid.value = Math.abs(a.face) * (0.5 + 0.5 * Math.sin(t * 0.7 + a.jitter));
     });
 

@@ -89,10 +89,17 @@ switch ($Action) {
       -RestartCount 3 `
       -RestartInterval (New-TimeSpan -Minutes 1) `
       -ExecutionTimeLimit (New-TimeSpan -Seconds 0) `
-      -MultipleInstances IgnoreNew
+      -MultipleInstances IgnoreNew `
+      -Priority 4
     # ExecutionTimeLimit 0 = never. The default is 3 days, after which Windows
     # would kill a daemon that is working perfectly, and the panel would revert
     # to its logo with nothing in the log to explain it.
+    #
+    # Priority 4 = normal. The default is 7, below normal for CPU AND I/O, and
+    # it was the fish tank's stutter (2026-10-08): the same daemon at the same
+    # minute reached ~6 fps with 354-845ms worst pushes from the task, and
+    # ~7.8 fps with 181-187ms from a terminal. A push loop that must feed a
+    # panel every frame cannot run at background priority.
 
     $principal = New-ScheduledTaskPrincipal `
       -UserId "$env:USERDOMAIN\$env:USERNAME" `
