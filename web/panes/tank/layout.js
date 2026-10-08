@@ -156,11 +156,25 @@ export function buildLayout(date) {
   };
 
   /* ── community ─────────────────────────────────────────────────────────
-   * One schooling species, optionally one centrepiece, optionally one grazer
-   * group. Counts are capped so the total never exceeds MAX_ANIMALS. */
+   * TWO shoals of different species (fish-behaviour-spec.md, Q2 — approved
+   * 2026-10-08), optionally one centrepiece, optionally one grazer group.
+   * Counts are capped so the total never exceeds MAX_ANIMALS.
+   *
+   * Each shoal keeps a ZONE, as in Ricky's reference clips: one mid-upper,
+   * one lower, each over about two thirds of the width on opposite sides, so
+   * they overlap in the middle. Nothing ever moves a zone — the population's
+   * spread is meant to look the same at minute 1 and minute 5.
+   *
+   * Shoal sizes from spec Q1: the main shoal 14-16, the second 8-10. */
   const cr = r.fork('community');
   const schoolId = cr.pick(SCHOOLING);
-  const school = { species: schoolId, count: cr.int(...SPECIES[schoolId].count) };
+  const school2Id = cr.pick(SCHOOLING.filter((id) => id !== schoolId));
+  const upperLeft = cr.chance(0.5);
+  const left = { x: [60, 900] }, right = { x: [380, 1220] };
+  const school = { species: schoolId, count: cr.int(14, 16),
+    zone: { ...(upperLeft ? left : right), y: [85, 235] } };
+  const school2 = { species: school2Id, count: cr.int(8, 10),
+    zone: { ...(upperLeft ? right : left), y: [190, 315] } };
   const centerpiece = cr.chance(0.7)
     ? (() => { const id = cr.pick(CENTERPIECES); return { species: id, count: cr.int(...SPECIES[id].count) }; })()
     : null;
@@ -168,9 +182,9 @@ export function buildLayout(date) {
     ? (() => { const id = cr.pick(GRAZERS); return { species: id, count: cr.int(...SPECIES[id].count) }; })()
     : null;
 
-  const groups = [school, centerpiece, grazer].filter(Boolean);
+  const groups = [school, school2, centerpiece, grazer].filter(Boolean);
   let total = groups.reduce((n, g) => n + g.count, 0);
-  while (total > MAX_ANIMALS) { school.count--; total--; }
+  while (total > MAX_ANIMALS) { (school.count > school2.count ? school : school2).count--; total--; }
 
   return {
     date,
@@ -184,6 +198,6 @@ export function buildLayout(date) {
     carpet,
     grass,
     scatter,
-    community: { school, centerpiece, grazer },
+    community: { school, school2, centerpiece, grazer },
   };
 }

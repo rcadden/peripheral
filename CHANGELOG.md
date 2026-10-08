@@ -1894,7 +1894,47 @@ step, not another theory.
   `Stop-ScheduledTask` ends `hidden.vbs`, and `node src\daemon.js` keeps
   running with nothing supervising it. Not fixed.
 
-## Decisions worth not relitigating
+### Changed — fish behaviour rebuilt to an approved spec; gouramis repainted (2026-10-08, after session close)
+
+**Seen on the glass — Ricky: "much better, they're milling now."** Then, on
+the repainted gouramis: "looks better."
+
+- **Spec first:** `docs/plans/fish-behaviour-spec.md`, written from Ricky's
+  reference clips (frames extracted with ffmpeg; clip 5, rainbowfish over
+  carpet, is the target look) and Deskworlds' riverscape model minus its river
+  current. Approved with all three of its picks.
+- **The finding that mattered:** in both freshwater clips the population stays
+  put and individuals move. Every rejected version had moved the group.
+- **`fish.js` rewritten:** shoaling fish hover on a station (flicks and
+  in-place turns, some through head-on), take short burst-and-glide trips
+  (2–6 BL; 1 in 4 anywhere in the zone), and are sometimes recruited by a
+  neighbour that just left; at most 30% of a shoal travels at once; no
+  cohesion while among neighbours. Swimmers carry a heading in the horizontal
+  plane, so going to the back foreshortens them through the shader's existing
+  `face`. Gouramis hover 5–15s and inspect the wood; corydoras scoot, forage
+  nose-down and rarely dash to the surface. Units are body lengths.
+- **Two shoals per tank in fixed zones** (main 14–16 mid-upper, second 8–10
+  lower, opposite sides), **rainbowfish added**, `MAX_ANIMALS` 30 → 40,
+  tail-beat cap 1.5 → 2.5 Hz for 8–10 fps. Side effect: the daily random draw
+  changed, so every date's community changed (today: honey gourami → pearls).
+- **Measured in a 5-minute simulation, 3 dates, both shoals:** 66–72% on
+  station, mixed headings 98–100% of samples, shoal centre moved 1.5–3.9 BL in
+  5 minutes. A first run had 16–34% of samples at the front/back depth limit —
+  flicks and spacing nudges random-walked depth while the station point
+  followed the fish. Fixed (depth held on station, soft walls): 2–5%.
+- **Gouramis repainted** after Ricky: "the two gourami look terrible." A
+  contact sheet of the painters alone showed kite-shaped triangle fins,
+  lollipop tails and no pelvic feelers, and on the pearl a pattern bug — dots
+  placed at `(k·0.618 mod 1, k·0.381 mod 1)`, and 0.381 = 1 − 0.618, so every
+  dot fell on one diagonal. New shared `gouramiBase()`: long low anal fin,
+  small rear dorsal, fan tail, two feelers; R2-sequence pearls; a soft-edged
+  honey breast (a rectangle version "dipped in ink" was caught on the sheet).
+  Rainbowfish tail changed from two spikes to a fan.
+- **Tests:** the old "school stays a school" and 4 fps beat-cap tests encoded
+  the rejected model and were replaced by the spec's rules — zones held,
+  population does not drift, most fish on station, mixed headings. 188/188.
+
+
 
 Recorded here so they survive a cold start. Full reasoning lives in `CLAUDE.md`.
 

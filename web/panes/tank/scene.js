@@ -598,7 +598,9 @@ export class TankScene {
       const u = m.material.uniforms;
       u.uPhase.value = a.phase;
       u.uFace.value = Math.abs(a.face) < 0.08 ? 0.08 * Math.sign(a.face || 1) : a.face;
-      u.uAmp.value = a.sp.style === 'shrimp' ? 0.0 : 0.05;
+      // Per-fish since the 2026-10-08 behaviour spec: strong in a burst, near
+      // straight in a glide, a lazy flutter on station.
+      u.uAmp.value = a.amp ?? 0.05;
       u.uFog.value = a.z * 0.25; // was 0.42: deep fish read as fading out (2026-10-08)
       u.uIrid.value = Math.abs(a.face) * (0.5 + 0.5 * Math.sin(t * 0.7 + a.jitter));
     });

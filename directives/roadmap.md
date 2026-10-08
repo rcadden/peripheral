@@ -1056,7 +1056,11 @@ screenshots to reading frames off the page's own canvas, that is a change to
 
 ### Found on the glass, 2026-10-08 — open
 
-- [ ] **Fish behaviour — CRITICAL PATH. Spec first, then code.** Three
+- [x] **Fish behaviour — DONE 2026-10-08, seen on the glass: "much better,
+      they're milling now."** Built to `docs/plans/fish-behaviour-spec.md`
+      (approved, all three picks yes — 14–16 + 8–10 shoals in zones,
+      rainbowfish). Gouramis repainted the same session ("looks better").
+      *Original text follows.* **Fish behaviour — CRITICAL PATH. Spec first, then code.** Three
       attempts (shared target; widened target; per-fish waypoints) all read
       as "a current" or wrong to Ricky. Write a one-page behaviour spec —
       hover/station-keeping, burst-and-coast, excursions and recruitment,
@@ -1072,7 +1076,9 @@ screenshots to reading frames off the page's own canvas, that is a change to
       caustic gains were cut; 60 consecutive rendered frames show none, and
       they do not track stutters. Cause unknown — get a photo/video of the
       glass before theorising again.
-- [ ] **Variety.** Ricky has only ever seen 2 fish shapes ("I'd like to see
+- [~] **Variety.** *2026-10-08: two shoals per tank and rainbowfish added
+      (spec Q2/Q3); gouramis repainted. More species not yet considered.*
+      Ricky has only ever seen 2 fish shapes ("I'd like to see
       more variety, but we can solve that later"). One school + one
       centrepiece + one grazer group per day today.
 - [ ] **Shrimp are invisible on the glass** — red cherry shrimp lost in the

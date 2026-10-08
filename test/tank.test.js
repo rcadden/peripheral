@@ -58,21 +58,28 @@ test('rule: tall at the back corners, nothing tall in front', () => {
   }
 });
 
-test('community: one schooling species, at most one centrepiece and one grazer group, capped', () => {
+test('community: two shoals of different species in separate zones, at most one centrepiece and one grazer group, capped', () => {
   for (const L of year) {
-    const { school, centerpiece, grazer } = L.community;
+    const { school, school2, centerpiece, grazer } = L.community;
     assert.equal(SPECIES[school.species].role, 'school');
+    assert.equal(SPECIES[school2.species].role, 'school');
+    assert.notEqual(school.species, school2.species, `${L.date}: two shoals of one species`);
+    // One mid-upper, one lower; on opposite sides, overlapping in the middle.
+    assert.ok(school.zone.y[1] <= school2.zone.y[1] && school.zone.y[0] < school2.zone.y[0], `${L.date}: zones`);
+    assert.notDeepEqual(school.zone.x, school2.zone.x, `${L.date}: same side`);
     if (centerpiece) assert.equal(SPECIES[centerpiece.species].role, 'centerpiece');
     if (grazer) assert.equal(SPECIES[grazer.species].role, 'grazer');
-    const total = school.count + (centerpiece?.count ?? 0) + (grazer?.count ?? 0);
+    const total = school.count + school2.count + (centerpiece?.count ?? 0) + (grazer?.count ?? 0);
     assert.ok(total <= MAX_ANIMALS, `${L.date}: ${total}`);
-    assert.ok(school.count >= 5, `${L.date}: a school of ${school.count} is not a school`);
+    assert.ok(school.count >= 14 && school.count <= 16, `${L.date}: main shoal ${school.count}`);
+    assert.ok(school2.count >= 8 && school2.count <= 10, `${L.date}: second shoal ${school2.count}`);
   }
 });
 
-test('a year of tanks uses every schooling species — variety is real', () => {
-  const seen = new Set(year.map((L) => L.community.school.species));
-  assert.equal(seen.size, 6);
+test('a year of tanks uses every schooling species, rainbowfish included — variety is real', () => {
+  const seen = new Set(year.flatMap((L) => [L.community.school.species, L.community.school2.species]));
+  assert.equal(seen.size, 7);
+  assert.ok(seen.has('rainbow'));
 });
 
 /* ── the sun ────────────────────────────────────────────────────────────── */
@@ -155,7 +162,7 @@ test('fish stay in the tank and in their water band over ten simulated minutes',
     for (let i = 0; i < 20 * 600; i++) step(pop, 0.05);
     for (const a of pop.agents) {
       assert.ok(a.x > 20 && a.x < W - 20, `${date} ${a.sp.id} x=${a.x}`);
-      if (a.sp.style !== 'cling') {
+      if (a.sp.style !== 'cling' && !a.dashing) { // a corydoras mid-dash leaves its band on purpose
         assert.ok(a.y > a.sp.band[0] - 15 && a.y < a.sp.band[1] + 15, `${date} ${a.sp.id} y=${a.y}`);
       }
       assert.ok(Number.isFinite(a.phase) && Number.isFinite(a.face), `${date} ${a.sp.id} finite`);
@@ -163,14 +170,45 @@ test('fish stay in the tank and in their water band over ten simulated minutes',
   }
 });
 
-test('the school stays a school — not scattered across the tank', () => {
-  const pop = createPopulation(buildLayout('2026-10-08'));
-  for (let i = 0; i < 20 * 300; i++) step(pop, 0.05);
-  const school = pop.agents.filter((a) => a.sp.style === 'school');
-  const xs = school.map((a) => a.x);
-  assert.ok(Math.max(...xs) - Math.min(...xs) < 700, `spread ${Math.max(...xs) - Math.min(...xs)}`);
+/* The behaviour spec (docs/plans/fish-behaviour-spec.md): the population stays
+ * put and individuals move. These are its sanity checks — they cannot pass the
+ * tank on their own; only the glass does. */
+test('each shoal keeps its zone, and the population does not drift — no current', () => {
+  for (const date of ['2026-10-08', '2026-10-09', '2026-10-11']) {
+    const L = buildLayout(date);
+    const pop = createPopulation(L);
+    const centre = (g) => { const f = pop.agents.filter((a) => a.group === g); return f.reduce((s, a) => s + a.x, 0) / f.length; };
+    for (let i = 0; i < 20 * 60; i++) step(pop, 0.05); // settle in for a minute
+    for (const [g, group] of [[0, L.community.school], [1, L.community.school2]]) {
+      const BL = SPECIES[group.species].length;
+      const samples = [];
+      for (let k = 0; k < 10; k++) { for (let i = 0; i < 20 * 30; i++) step(pop, 0.05); samples.push(centre(g)); }
+      // Over five minutes the shoal's centre stays within a few body lengths.
+      assert.ok(Math.max(...samples) - Math.min(...samples) < 6 * BL,
+        `${date} shoal ${g}: centre wandered ${(Math.max(...samples) - Math.min(...samples)).toFixed(0)}px`);
+      for (const a of pop.agents.filter((b) => b.group === g)) {
+        assert.ok(a.x > group.zone.x[0] - 2 * BL && a.x < group.zone.x[1] + 2 * BL, `${date} ${a.sp.id} x=${a.x.toFixed(0)} outside zone`);
+      }
+    }
+  }
 });
 
-test('tail beats stay under the 4 fps Nyquist limit (2 Hz)', () => {
-  assert.ok(MAX_BEAT_HZ < 2);
+test('most of a shoal is on station at any moment, and neighbours face both ways', () => {
+  const pop = createPopulation(buildLayout('2026-10-08'));
+  for (let i = 0; i < 20 * 60; i++) step(pop, 0.05);
+  let still = 0, total = 0, mixed = 0, checks = 0;
+  for (let k = 0; k < 120; k++) {
+    for (let i = 0; i < 10; i++) step(pop, 0.05);
+    const shoal = pop.agents.filter((a) => a.group === 0);
+    still += shoal.filter((a) => a.mode !== 'travel').length; total += shoal.length;
+    const right = shoal.filter((a) => a.facing > 0).length;
+    if (right > 0 && right < shoal.length) mixed++;
+    checks++;
+  }
+  assert.ok(still / total > 0.55, `only ${(100 * still / total).toFixed(0)}% on station`);
+  assert.ok(mixed / checks > 0.9, `neighbours all faced one way ${(100 - 100 * mixed / checks).toFixed(0)}% of the time`);
+});
+
+test('tail beats stay under the ~8 fps Nyquist limit (4 Hz), with margin', () => {
+  assert.ok(MAX_BEAT_HZ <= 2.5);
 });

@@ -171,6 +171,48 @@ function stripe(g, L, b, from, to, yFrac, thick, col0, col1) {
   g.fill();
 }
 
+/** A fan-shaped caudal fin with a shallow notch — gouramis, rainbowfish. */
+function fanTail(g, L, b, fill, rim, spread = 0.16) {
+  const x = b.x0 + 2;
+  fin(g, [[x, b.top(b.x0) * 0.85], [x - L * 0.08, -L * spread * 1.05, L * 0.02, -L * spread],
+    [L * 0.07, 0], [L * 0.02, L * spread], [x - L * 0.08, L * spread * 1.05, x, b.bot(b.x0) * 0.85]], fill, rim);
+}
+
+/**
+ * A gourami: deep, laterally flat oval with a small snout; a LONG, low anal
+ * fin running most of the belly and past the tail base; a small dorsal set
+ * well back; a fan tail; and the thread-like pelvic feelers that make a
+ * gourami read as one. `pattern` paints inside the body outline.
+ */
+function gouramiBase(g, L, { back, mid, belly, fins, rim, feelers }, pattern) {
+  const shape = { h: 0.19, belly: 1.0, nose: 0.94, ped: 0.22, peak: 0.5, blunt: 0.55 };
+  const p = body(g, L, shape);
+  fanTail(g, L, p, fins, rim, 0.17);
+  // Anal fin: from behind the pelvics along the belly, deepest at the rear,
+  // its trailing tip reaching back past the tail base.
+  fin(g, [[L * 0.68, p.bot(L * 0.68)], [L * 0.58, p.bot(L * 0.58) + L * 0.06],
+    [L * 0.34, p.bot(L * 0.34) + L * 0.11], [L * 0.2, L * 0.13],
+    [L * 0.25, p.bot(L * 0.25)]], fins, rim);
+  // Dorsal: short-based and set back, sloping rearward.
+  fin(g, [[L * 0.48, p.top(L * 0.48)], [L * 0.38, p.top(L * 0.4) - L * 0.1],
+    [L * 0.27, p.top(L * 0.3) - L * 0.05], [L * 0.28, p.top(L * 0.28)]], fins, rim);
+  const b = body(g, L, shape);
+  shadeBody(g, L, b, back, mid, belly);
+  withClip(g, () => pattern());
+  gill(g, L * 0.79, b);
+  // Pelvic feelers, drawn over the body: two long threads trailing back.
+  g.strokeStyle = feelers;
+  g.lineCap = 'round';
+  for (const [w, end] of [[L * 0.009, 0.28], [L * 0.007, 0.36]]) {
+    g.lineWidth = w;
+    g.beginPath();
+    g.moveTo(L * 0.73, b.bot(L * 0.73) * 0.75);
+    g.quadraticCurveTo(L * 0.62, L * 0.27, L * end, L * 0.29);
+    g.stroke();
+  }
+  return b;
+}
+
 const PAINTERS = {
   neon(g, L) {
     const b = tetraBase(g, L, { back: '#5d5a3c', mid: '#9aa38c', bellyCol: '#e8ecea' });
@@ -257,76 +299,102 @@ const PAINTERS = {
     eye(g, L * 0.87, -L * 0.012, L * 0.038, '#d84030');
   },
 
-  honey(g, L) {
-    const shape = { h: 0.175, belly: 1.05, nose: 0.94, ped: 0.24, peak: 0.55, blunt: 0.45 };
+  /* Boeseman's rainbowfish (2026-10-08, behaviour spec Q3): deep, laterally
+   * flat body with a high back; steel-blue fore, orange-red aft — the fish in
+   * Ricky's clip 5. Two dorsal fins and a long anal fin, all tinted. Tail
+   * changed the same day from forkTail (it rendered as two spikes) to fanTail. */
+  rainbow(g, L) {
+    const shape = { h: 0.165, belly: 1.0, nose: 0.95, ped: 0.24, peak: 0.52, blunt: 0.5 };
     const probe = body(g, L, shape);
-    roundTail(g, L, probe, 'rgba(240,170,60,0.55)', 'rgba(255,200,90,0.6)');
-    fin(g, [[L * 0.36, probe.top(L * 0.36)], [L * 0.5, -L * 0.3], [L * 0.64, probe.top(L * 0.64)]], 'rgba(240,170,60,0.5)', null);
-    fin(g, [[L * 0.28, probe.bot(L * 0.28)], [L * 0.45, L * 0.3], [L * 0.7, probe.bot(L * 0.7)]], 'rgba(240,160,50,0.5)', null);
+    fanTail(g, L, probe, 'rgba(230,110,60,0.6)', 'rgba(255,170,110,0.5)', 0.13);
+    fin(g, [[L * 0.56, probe.top(L * 0.56)], [L * 0.6, -L * 0.25], [L * 0.68, probe.top(L * 0.68)]], 'rgba(120,150,200,0.5)', null);
+    fin(g, [[L * 0.3, probe.top(L * 0.3)], [L * 0.36, -L * 0.26], [L * 0.52, probe.top(L * 0.52)]], 'rgba(230,110,60,0.55)', null);
+    fin(g, [[L * 0.28, probe.bot(L * 0.28)], [L * 0.38, L * 0.24], [L * 0.62, probe.bot(L * 0.62)]], 'rgba(230,110,60,0.55)', null);
     const b = body(g, L, shape);
-    shadeBody(g, L, b, '#c07418', '#f4a83a', '#f8cc70');
+    shadeBody(g, L, b, '#2d4a78', '#6f93c4', '#c8d6e6');
     withClip(g, () => {
-      // Dark throat of a displaying male.
-      g.fillStyle = radial(g, L * 0.8, L * 0.1, L * 0.2, 'rgba(30,30,60,0.85)');
-      g.fillRect(0, -L, L, 2 * L);
+      // Orange-red rear, blending into the blue mid-body.
+      const rear = g.createLinearGradient(L * 0.3, 0, L * 0.6, 0);
+      rear.addColorStop(0, 'rgba(236,92,40,0.95)');
+      rear.addColorStop(1, 'rgba(236,92,40,0)');
+      g.fillStyle = rear;
+      g.fillRect(0, -L, L * 0.6, 2 * L);
     });
-    // Pelvic thread.
-    g.strokeStyle = 'rgba(250,200,110,0.8)';
-    g.lineWidth = 1.6;
-    g.beginPath(); g.moveTo(L * 0.72, b.bot(L * 0.72) * 0.6); g.quadraticCurveTo(L * 0.55, L * 0.24, L * 0.42, L * 0.28); g.stroke();
-    gill(g, L * 0.78, b);
-    eye(g, L * 0.86, -L * 0.03, L * 0.035, '#d0a050');
+    gill(g, L * 0.8, b);
+    eye(g, L * 0.87, -L * 0.03, L * 0.036, '#d8dce0');
+  },
+
+  /* ── gouramis, repainted 2026-10-08 ─────────────────────────────────────
+   * Ricky, on the glass: "the two gourami look terrible." A contact sheet of
+   * the painters alone showed why — generic kite-shaped triangle fins,
+   * lollipop tails, no pelvic feelers, and on the pearl a pattern bug (below).
+   * All three now share gouramiBase(): the real anatomy. */
+  honey(g, L) {
+    gouramiBase(g, L, { back: '#b8761c', mid: '#f0a63a', belly: '#f6cc78',
+      fins: 'rgba(240,170,60,0.5)', rim: 'rgba(255,214,120,0.6)', feelers: 'rgba(250,206,120,0.85)' }, () => {
+      // A displaying male: dark blue-black from the chin back along the
+      // breast, as a band under the midline — not a patch on the face.
+      // Soft-edged on every side: a first version used a rectangle and read
+      // as the fish dipped in ink.
+      g.save();
+      g.translate(L * 0.76, L * 0.15);
+      g.scale(2.2, 1);
+      const band = g.createRadialGradient(0, 0, 0, 0, 0, L * 0.13);
+      band.addColorStop(0, 'rgba(34,40,78,0.88)');
+      band.addColorStop(0.55, 'rgba(34,40,78,0.7)');
+      band.addColorStop(1, 'rgba(34,40,78,0)');
+      g.fillStyle = band;
+      g.fillRect(-L * 0.2, -L * 0.2, L * 0.4, L * 0.4);
+      g.restore();
+    });
+    eye(g, L * 0.86, -L * 0.035, L * 0.034, '#d0a050');
   },
   dwarf(g, L) {
-    const shape = { h: 0.18, belly: 1.05, nose: 0.94, ped: 0.24, peak: 0.55, blunt: 0.45 };
-    const probe = body(g, L, shape);
-    roundTail(g, L, probe, 'rgba(220,70,50,0.55)', 'rgba(90,170,230,0.7)');
-    fin(g, [[L * 0.34, probe.top(L * 0.34)], [L * 0.5, -L * 0.3], [L * 0.64, probe.top(L * 0.64)]], 'rgba(220,70,50,0.5)', 'rgba(90,170,230,0.7)');
-    fin(g, [[L * 0.28, probe.bot(L * 0.28)], [L * 0.45, L * 0.3], [L * 0.7, probe.bot(L * 0.7)]], 'rgba(220,70,50,0.5)', 'rgba(90,170,230,0.7)');
-    const b = body(g, L, shape);
-    shadeBody(g, L, b, '#9a3020', '#d84a30', '#e08060');
-    withClip(g, () => {
-      // Alternating blue bars.
-      for (let x = L * 0.28; x < L * 0.82; x += L * 0.065) {
-        g.fillStyle = 'rgba(70,165,230,0.85)';
+    gouramiBase(g, L, { back: '#a83420', mid: '#e05436', belly: '#ec8a64',
+      fins: 'rgba(214,72,52,0.55)', rim: 'rgba(110,190,240,0.75)', feelers: 'rgba(240,120,90,0.85)' }, () => {
+      // Slanted, irregular turquoise bars — not an even barcode.
+      g.fillStyle = 'rgba(96,186,236,0.85)';
+      let x = L * 0.27, k = 0;
+      while (x < L * 0.82) {
+        const w = L * (0.016 + 0.01 * ((k * 0.618) % 1));
+        const slant = L * 0.05;
         g.beginPath();
-        g.moveTo(x, -L * 0.25); g.lineTo(x + L * 0.022, -L * 0.25);
-        g.lineTo(x + L * 0.012, L * 0.25); g.lineTo(x - L * 0.01, L * 0.25);
-        g.fill();
+        g.moveTo(x + slant, -L * 0.25); g.lineTo(x + slant + w, -L * 0.25);
+        g.lineTo(x + w, L * 0.25); g.lineTo(x, L * 0.25);
+        g.closePath(); g.fill();
+        x += L * (0.045 + 0.02 * ((k * 0.381 + 0.3) % 1)); k++;
       }
-      g.fillStyle = radial(g, L * 0.84, L * 0.1, L * 0.16, 'rgba(60,150,220,0.95)');
+      // Blue throat.
+      g.fillStyle = radial(g, L * 0.84, L * 0.1, L * 0.14, 'rgba(70,150,220,0.9)');
       g.fillRect(0, -L, L, 2 * L);
     });
-    gill(g, L * 0.78, b);
-    eye(g, L * 0.86, -L * 0.03, L * 0.034, '#d05a40');
+    eye(g, L * 0.86, -L * 0.035, L * 0.034, '#c04030');
   },
   pearl(g, L) {
-    const shape = { h: 0.155, belly: 1.05, nose: 0.95, ped: 0.24, peak: 0.55, blunt: 0.45 };
-    const probe = body(g, L, shape);
-    roundTail(g, L, probe, 'rgba(200,190,170,0.45)', 'rgba(240,235,220,0.5)', 0.13);
-    fin(g, [[L * 0.38, probe.top(L * 0.38)], [L * 0.44, -L * 0.28], [L * 0.6, probe.top(L * 0.6)]], 'rgba(200,190,170,0.45)', null);
-    fin(g, [[L * 0.26, probe.bot(L * 0.26)], [L * 0.42, L * 0.3], [L * 0.72, probe.bot(L * 0.72)]], 'rgba(220,140,80,0.45)', null);
-    const b = body(g, L, shape);
-    shadeBody(g, L, b, '#6a5e4c', '#b4a68e', '#e8c8a0');
-    withClip(g, () => {
-      // Orange throat, pearl spots, dark zigzag lateral line.
-      g.fillStyle = radial(g, L * 0.82, L * 0.12, L * 0.2, 'rgba(235,120,50,0.85)');
+    gouramiBase(g, L, { back: '#6e6656', mid: '#b8ad98', belly: '#e9dcc6',
+      fins: 'rgba(206,196,176,0.5)', rim: 'rgba(240,235,222,0.5)', feelers: 'rgba(236,150,90,0.85)' }, () => {
+      // Orange breast of a male.
+      g.fillStyle = radial(g, L * 0.76, L * 0.15, L * 0.2, 'rgba(236,128,56,0.85)');
       g.fillRect(0, -L, L, 2 * L);
-      for (let k = 0; k < 140; k++) {
-        const x = L * (0.25 + 0.65 * ((k * 0.618) % 1));
-        const y = L * (-0.18 + 0.36 * ((k * 0.381) % 1));
-        g.fillStyle = 'rgba(250,250,245,0.75)';
-        g.beginPath(); g.arc(x, y, L * 0.006, 0, TAU); g.fill();
+      /* Pearls evenly over the whole body. The first version placed dot k at
+       * ((k*0.618)%1, (k*0.381)%1) — and 0.381 = 1 - 0.618, so every dot fell
+       * on one diagonal: the "sash." The R2 sequence has no such correlation. */
+      for (let k = 0; k < 260; k++) {
+        const x = L * (0.22 + 0.72 * ((0.5 + k * 0.7548776662) % 1));
+        const y = L * (-0.2 + 0.4 * ((0.5 + k * 0.5698402910) % 1));
+        g.fillStyle = 'rgba(252,250,242,0.8)';
+        g.beginPath(); g.arc(x, y, L * 0.0075, 0, TAU); g.fill();
       }
-      g.strokeStyle = 'rgba(30,25,20,0.8)';
-      g.lineWidth = L * 0.012;
-      g.beginPath();
-      for (let x = L * 0.3; x <= L * 0.8; x += L * 0.03) g.lineTo(x, Math.sin(x * 0.3) * L * 0.01);
-      g.stroke();
+      // A straight dark stripe from the snout to a spot at the tail base.
+      const line = g.createLinearGradient(L * 0.26, 0, L * 0.88, 0);
+      line.addColorStop(0, 'rgba(26,22,18,0.85)');
+      line.addColorStop(1, 'rgba(26,22,18,0.15)');
+      g.fillStyle = line;
+      g.fillRect(L * 0.26, -L * 0.012, L * 0.62, L * 0.024);
       g.fillStyle = '#1a1612';
-      g.beginPath(); g.arc(L * 0.28, 0, L * 0.022, 0, TAU); g.fill();
+      g.beginPath(); g.arc(L * 0.27, 0, L * 0.026, 0, TAU); g.fill();
     });
-    eye(g, L * 0.87, -L * 0.03, L * 0.033, '#c06030');
+    eye(g, L * 0.86, -L * 0.035, L * 0.034, '#c06030');
   },
 
   corydoras(g, L) {

@@ -24,17 +24,24 @@
 export const SPECIES = {
   /* ── schooling species (exactly one per tank) ─────────────────────────── */
   neon:      { id: 'neon',      name: 'Neon tetra',        role: 'school', style: 'school',
-               length: 49, depth: 0.30, band: [85, 300], speed: [14, 30], count: [11, 15], beatHz: 1.1 },
+               length: 49, depth: 0.30, band: [85, 315], speed: [14, 30], count: [11, 15], beatHz: 1.1 },
   cardinal:  { id: 'cardinal',  name: 'Cardinal tetra',    role: 'school', style: 'school',
-               length: 55, depth: 0.30, band: [85, 300], speed: [14, 30], count: [10, 14], beatHz: 1.0 },
+               length: 55, depth: 0.30, band: [85, 315], speed: [14, 30], count: [10, 14], beatHz: 1.0 },
   ember:     { id: 'ember',     name: 'Ember tetra',       role: 'school', style: 'school',
-               length: 36, depth: 0.32, band: [85, 300], speed: [12, 26], count: [13, 18], beatHz: 1.2 },
+               length: 36, depth: 0.32, band: [85, 315], speed: [12, 26], count: [13, 18], beatHz: 1.2 },
   rummynose: { id: 'rummynose', name: 'Rummy-nose tetra',  role: 'school', style: 'school',
-               length: 60, depth: 0.27, band: [85, 300], speed: [16, 32], count: [9, 12], beatHz: 1.0 },
+               length: 60, depth: 0.27, band: [85, 315], speed: [16, 32], count: [9, 12], beatHz: 1.0 },
   harlequin: { id: 'harlequin', name: 'Harlequin rasbora', role: 'school', style: 'school',
-               length: 57, depth: 0.33, band: [85, 300], speed: [14, 28], count: [9, 13], beatHz: 1.0 },
+               length: 57, depth: 0.33, band: [85, 315], speed: [14, 28], count: [9, 13], beatHz: 1.0 },
   chili:     { id: 'chili',     name: 'Chili rasbora',     role: 'school', style: 'school',
-               length: 29, depth: 0.30, band: [85, 300], speed: [10, 22], count: [15, 20], beatHz: 1.3 },
+               length: 29, depth: 0.30, band: [85, 315], speed: [10, 22], count: [15, 20], beatHz: 1.3 },
+
+  /* Boeseman's rainbowfish, added 2026-10-08 (fish-behaviour-spec.md, Q3):
+   * Ricky's preferred reference (clip 5) is a rainbowfish tank. Deep-bodied,
+   * blue fore and orange aft. Drawn ~1.5x a neon rather than the true ~2.7x so
+   * a shoal of them still fits the glass. */
+  rainbow:   { id: 'rainbow',   name: "Boeseman's rainbowfish", role: 'school', style: 'school',
+               length: 75, depth: 0.36, band: [85, 315], speed: [14, 30], count: [8, 10], beatHz: 0.9 },
 
   /* ── centrepiece (optional, one species) ──────────────────────────────── */
   honey:     { id: 'honey',     name: 'Honey gourami',     role: 'centerpiece', style: 'cruise',
@@ -72,10 +79,10 @@ for (const sp of Object.values(SPECIES)) {
   sp.speed = sp.speed.map((v) => v * SPEED_SCALE);
 }
 
-/* Swim bands widened 2026-10-08 (schools ~[130,330] -> [85,300], centrepieces
+/* Swim bands widened 2026-10-08 (schools ~[130,330] -> [85,300] -> [85,315], centrepieces
  * [100,280] -> [80,310]): the old bands kept everything in a horizontal strip.
  * Grazers keep theirs — they live on the substrate. */
-export const SCHOOLING = ['neon', 'cardinal', 'ember', 'rummynose', 'harlequin', 'chili'];
+export const SCHOOLING = ['neon', 'cardinal', 'ember', 'rummynose', 'harlequin', 'chili', 'rainbow'];
 export const CENTERPIECES = ['honey', 'dwarf', 'pearl'];
 export const GRAZERS = ['corydoras', 'otocinclus', 'amano', 'cherry'];
 
@@ -85,4 +92,4 @@ export const GRAZERS = ['corydoras', 'otocinclus', 'amano', 'cherry'];
  * so this is a conservative cap that a software-GL fallback can still carry
  * at 4 fps (measured in this repo's headless SwiftShader, see CHANGELOG).
  */
-export const MAX_ANIMALS = 30;
+export const MAX_ANIMALS = 40; // 30 -> 40, 2026-10-08: two shoals (spec Q2), GPU path confirmed

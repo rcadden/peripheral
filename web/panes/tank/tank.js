@@ -125,6 +125,7 @@ function build(date) {
   const L = tank.layout;
   console.log(`[tank] built ${date} in ${Math.round(performance.now() - started)}ms — ` +
     `${L.mood} plants, ${L.community.school.count} ${L.community.school.species}` +
+    `, ${L.community.school2.count} ${L.community.school2.species}` +
     `${L.community.centerpiece ? `, ${L.community.centerpiece.count} ${L.community.centerpiece.species}` : ''}` +
     `${L.community.grazer ? `, ${L.community.grazer.count} ${L.community.grazer.species}` : ''}`);
 }
